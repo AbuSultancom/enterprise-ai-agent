@@ -1,0 +1,30 @@
+services:
+  agent:
+    build: ..
+    ports:
+      - "8000:8000"
+    environment:
+      # Format: role:key,role:key  (roles: admin, user)
+      API_KEYS: "admin:${ADMIN_KEY:-dev-admin-key},user:${USER_KEY:-dev-user-key}"
+      DEFAULT_MODEL: "ollama:qwen2.5:7b"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      # Uncomment for cloud providers:
+      # OPENAI_BASE_URL: "https://api.deepseek.com/v1"
+      # OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    volumes:
+      - agent-data:/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  agent-data:
+  ollama-models:
