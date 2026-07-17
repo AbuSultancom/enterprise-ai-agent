@@ -18,7 +18,10 @@ COPY memory ./memory
 COPY connectors ./connectors
 COPY api ./api
 COPY dashboard ./dashboard
+COPY config_loader.py ./config_loader.py
+COPY config ./config
 
 ENV MEMORY_DB_PATH=/data/knowledge.json
+ENV SETTINGS_PATH=/app/config/settings.json
 EXPOSE 8000
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

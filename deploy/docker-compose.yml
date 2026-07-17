@@ -1,33 +1,37 @@
 services:
   agent:
     build: ..
+    env_file: ../.env
     ports:
       - "8000:8000"
     environment:
-      # Format: role:key,role:key  (roles: admin, user)
       API_KEYS: "admin:${ADMIN_KEY:-dev-admin-key},user:${USER_KEY:-dev-user-key}"
-      DEFAULT_MODEL: "ollama:qwen2.5:7b"
-      OLLAMA_BASE_URL: "http://ollama:11434"
-      # Uncomment for cloud providers:
-      # OPENAI_BASE_URL: "https://api.deepseek.com/v1"
-      # OPENAI_API_KEY: "${OPENAI_API_KEY}"
-      # Accounting ERP (Onyx Pro / SQL Server), optional:
-      # ACCOUNTING_DB_URL: "${ACCOUNTING_DB_URL}"
+      DEFAULT_MODEL: "${DEFAULT_MODEL:-ollama:qwen2.5:7b}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ACCOUNTING_DB_URL: "${ACCOUNTING_DB_URL:-}"
+      SETTINGS_PATH: "/app/config/settings.json"
     volumes:
       - agent-data:/data
+      - ../config:/app/config:ro   # settings from setup.py (read-only inside container)
     depends_on:
       - ollama
     restart: unless-stopped
 
   whatsapp:
     build: ../whatsapp
+    env_file: ../.env
     ports:
       - "3001:3001"   # QR scan page: http://localhost:3001
     environment:
       AGENT_URL: "http://agent:8000"
-      AGENT_API_KEY: "${ADMIN_KEY:-dev-admin-key}"
-      # BOT_PREFIX: "!ai "        # only reply to messages starting with this
-      # IGNORE_GROUPS: "true"     # ignore group chats (default true)
+      WHATSAPP_ENABLED: "${WHATSAPP_ENABLED:-true}"
+      WHATSAPP_ROLE: "${WHATSAPP_ROLE:-user}"
+      ADMIN_KEY: "${ADMIN_KEY:-dev-admin-key}"
+      USER_KEY: "${USER_KEY:-dev-user-key}"
+      BOT_PREFIX: "${BOT_PREFIX:-}"
+      IGNORE_GROUPS: "${IGNORE_GROUPS:-true}"
     volumes:
       - whatsapp-session:/data
     depends_on:
