@@ -9,6 +9,7 @@ A self-hosted, open-source AI agent platform for companies — inspired by OpenC
 - **Pluggable tools** — built-in: web search, calculator, file reader, clock. Add your own with one decorator
 - **Company knowledge (RAG)** — upload internal documents; the agent retrieves and answers from them
 - **Accounting integration (ERP)** — connects read-only to your accounting database (Onyx Pro / SQL Server) so the agent answers "how much did we sell this month?", "top customers?", "cash balance?" — see [docs/ONYX_SETUP.md](docs/ONYX_SETUP.md)
+- **WhatsApp integration** — customers/staff chat with the agent on WhatsApp; login once via QR code (like WhatsApp Web) — see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)
 - **Role-based access** — `admin` and `user` roles via API keys (SSO/LDAP-ready design)
 - **Web dashboard** — clean chat UI served by the API, no separate frontend build
 - **One-command deploy** — Docker Compose with Ollama included
@@ -16,30 +17,27 @@ A self-hosted, open-source AI agent platform for companies — inspired by OpenC
 ## Architecture
 
 ```
-Dashboard (chat UI)
-      │
-      ▼
-FastAPI API ── auth + RBAC (admin / user)
-      │
-      ├──▶ Agent (ReAct loop) ──▶ Tool Registry (web · calc · files · accounting · custom)
-      │
-      ├──▶ LLM Gateway ──▶ Ollama (local) / OpenAI-compatible (cloud)
-      │
-      ├──▶ Knowledge Store (company docs, RAG-ready)
-      │
-      └──▶ Accounting Connector ──▶ Onyx Pro DB (SQL Server, read-only)
+WhatsApp ──▶ whatsapp bridge (QR login)
+                  │
+Dashboard ────────┼──────▶ FastAPI API (auth + RBAC)
+                  │              │
+                  │              ├──▶ Agent (ReAct) ──▶ Tools (web · calc · files · accounting)
+                  │              ├──▶ LLM Gateway ──▶ Ollama (local) / OpenAI-compatible (cloud)
+                  │              ├──▶ Knowledge Store (company docs, RAG)
+                  │              └──▶ Accounting Connector ──▶ Onyx Pro DB (SQL Server, read-only)
 ```
 
 ## Quick start
 
 ```bash
 cd deploy
-docker compose up -d
+docker compose up -d --build
 # pull a model (first time only)
 docker exec -it deploy-ollama-1 ollama pull qwen2.5:7b
 ```
 
-Open **http://localhost:8000** — log in with the dev key `dev-admin-key`.
+- Web dashboard: **http://localhost:8000** (dev key: `dev-admin-key`)
+- WhatsApp QR scan page: **http://localhost:3001**
 
 ### Local development (no Docker)
 
@@ -49,11 +47,10 @@ ollama pull qwen2.5:7b          # or any model you prefer
 uvicorn api.main:app --reload
 ```
 
-## Accounting integration (Onyx Pro)
+## Guides
 
-The agent ships with 6 accounting tools: sales summary, revenue by month, top
-customers, expenses summary, invoice lookup, and cash/bank balances. Setup guide:
-[docs/ONYX_SETUP.md](docs/ONYX_SETUP.md).
+- [docs/ONYX_SETUP.md](docs/ONYX_SETUP.md) — connect the Onyx Pro accounting database
+- [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md) — connect WhatsApp via QR
 
 ## Configuration (environment variables)
 
