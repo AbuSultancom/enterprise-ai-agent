@@ -1,0 +1,112 @@
+/**
+ * WhatsApp bridge service — connects WhatsApp (via QR login) to the AI agent.
+ *
+ * Flow: scan QR once (like WhatsApp Web) -> session persists in a volume ->
+ * every incoming message is forwarded to the agent's /v1/chat endpoint ->
+ * the agent's answer is sent back as a WhatsApp reply.
+ *
+ * NOTE: this uses the unofficial WhatsApp Web protocol (whatsapp-web.js).
+ * For a mission-critical business number, consider the official WhatsApp
+ * Business API instead.
+ */
+import pkg from 'whatsapp-web.js';
+const { Client, LocalAuth } = pkg;
+import qrcode from 'qrcode';
+import express from 'express';
+
+// --- Config ---
+const AGENT_URL = process.env.AGENT_URL || 'http://agent:8000';
+const AGENT_API_KEY = process.env.AGENT_API_KEY || 'dev-admin-key';
+const PORT = process.env.WHATSAPP_PORT || 3001;
+const PREFIX = process.env.BOT_PREFIX || ''; // e.g. "!ai " to only reply when prefixed; empty = reply to all
+const IGNORE_GROUPS = process.env.IGNORE_GROUPS !== 'false';
+
+// --- State ---
+let qrDataUrl = null;
+let status = 'initializing'; // initializing | qr | ready | disconnected
+
+// --- WhatsApp client (session persisted in /data/.wwebjs_auth) ---
+const client = new Client({
+  authStrategy: new LocalAuth({ dataPath: '/data/.wwebjs_auth' }),
+  puppeteer: {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  },
+});
+
+client.on('qr', async (qr) => {
+  status = 'qr';
+  qrDataUrl = await qrcode.toDataURL(qr);
+  console.log('QR code ready — open http://localhost:' + PORT + ' to scan it');
+});
+
+client.on('ready', () => {
+  status = 'ready';
+  qrDataUrl = null;
+  console.log('WhatsApp client is ready');
+});
+
+client.on('disconnected', (reason) => {
+  status = 'disconnected';
+  console.log('Disconnected:', reason);
+});
+
+client.on('message', async (msg) => {
+  try {
+    if (msg.fromMe) return;
+    if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) return;
+
+    let text = msg.body.trim();
+    if (PREFIX) {
+      if (!text.startsWith(PREFIX)) return;
+      text = text.slice(PREFIX.length).trim();
+      if (!text) return;
+    }
+
+    await msg.reply('⏳ ...');
+    const res = await fetch(`${AGENT_URL}/v1/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': AGENT_API_KEY,
+      },
+      body: JSON.stringify({ message: text }),
+    });
+
+    if (!res.ok) {
+      await msg.reply(`Agent error: ${res.status}`);
+      return;
+    }
+    const data = await res.json();
+    await msg.reply(data.answer || 'No answer.');
+  } catch (err) {
+    console.error('Message handling error:', err);
+    try { await msg.reply('Sorry, something went wrong.'); } catch {}
+  }
+});
+
+client.initialize();
+
+// --- Tiny web UI for QR scanning + status ---
+const app = express();
+
+app.get('/', (req, res) => {
+  if (status === 'ready') {
+    res.send(`<html><body style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;height:100vh">
+      <div style="text-align:center"><h1>✅ WhatsApp connected</h1><p>The AI agent is answering messages.</p></div></body></html>`);
+  } else if (status === 'qr' && qrDataUrl) {
+    res.send(`<html><head><meta http-equiv="refresh" content="5"></head>
+      <body style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;height:100vh">
+      <div style="text-align:center"><h1>Scan with WhatsApp</h1>
+      <p>WhatsApp → Linked devices → Link a device</p>
+      <img src="${qrDataUrl}" style="width:300px;border-radius:12px"/></div></body></html>`);
+  } else {
+    res.send(`<html><head><meta http-equiv="refresh" content="3"></head>
+      <body style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;height:100vh">
+      <div><h1>Status: ${status}</h1><p>Waiting...</p></div></body></html>`);
+  }
+});
+
+app.get('/status', (req, res) => res.json({ status }));
+
+app.listen(PORT, () => console.log(`QR web UI on http://localhost:${PORT}`));
