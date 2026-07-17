@@ -11,10 +11,27 @@ services:
       # Uncomment for cloud providers:
       # OPENAI_BASE_URL: "https://api.deepseek.com/v1"
       # OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      # Accounting ERP (Onyx Pro / SQL Server), optional:
+      # ACCOUNTING_DB_URL: "${ACCOUNTING_DB_URL}"
     volumes:
       - agent-data:/data
     depends_on:
       - ollama
+    restart: unless-stopped
+
+  whatsapp:
+    build: ../whatsapp
+    ports:
+      - "3001:3001"   # QR scan page: http://localhost:3001
+    environment:
+      AGENT_URL: "http://agent:8000"
+      AGENT_API_KEY: "${ADMIN_KEY:-dev-admin-key}"
+      # BOT_PREFIX: "!ai "        # only reply to messages starting with this
+      # IGNORE_GROUPS: "true"     # ignore group chats (default true)
+    volumes:
+      - whatsapp-session:/data
+    depends_on:
+      - agent
     restart: unless-stopped
 
   ollama:
@@ -28,3 +45,4 @@ services:
 volumes:
   agent-data:
   ollama-models:
+  whatsapp-session:
