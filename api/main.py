@@ -10,7 +10,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import tools.builtin  # noqa: F401 - registers built-in tools
+import tools.accounting  # noqa: F401 - registers accounting/ERP tools
 from agent_core.agent import Agent
+from connectors.accounting import connector as accounting_db
 from llm_gateway.gateway import LLMGateway, Message
 from memory.store import KnowledgeStore
 from tools.registry import registry
@@ -33,7 +35,7 @@ def require_role(*roles: str):
     return checker
 
 
-app = FastAPI(title="Enterprise AI Agent Platform", version="0.1.0")
+app = FastAPI(title="Enterprise AI Agent Platform", version="0.2.0")
 gateway = LLMGateway()
 store = KnowledgeStore()
 
@@ -52,7 +54,8 @@ class DocRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "providers": await gateway.health(), "tools": len(registry.list())}
+    return {"status": "ok", "providers": await gateway.health(),
+            "tools": len(registry.list()), "accounting_db": accounting_db.available}
 
 
 @app.post("/v1/chat", dependencies=[Depends(require_role("admin", "user"))])
@@ -95,6 +98,20 @@ async def rotate_key(role: str = "user"):
     key = secrets.token_urlsafe(32)
     API_KEYS[key] = role
     return {"api_key": key, "role": role}
+
+
+class AccountingQuery(BaseModel):
+    query: str
+    params: dict | None = None
+
+
+@app.post("/v1/accounting/query", dependencies=[Depends(require_role("admin"))])
+async def accounting_query(req: AccountingQuery):
+    """Run a whitelisted read-only accounting query (admin only)."""
+    try:
+        return accounting_db.run(req.query, **(req.params or {}))
+    except (RuntimeError, ValueError, PermissionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 app.mount("/", StaticFiles(directory="dashboard", html=True), name="dashboard")
