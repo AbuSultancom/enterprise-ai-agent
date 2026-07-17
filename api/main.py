@@ -1,10 +1,14 @@
-"""FastAPI application: auth, chat endpoint, knowledge management, dashboard."""
+"""FastAPI application: auth, chat (incl. streaming), knowledge + file upload,
+accounting, audit log, dashboard."""
 from __future__ import annotations
 
+import datetime
+import json
 import os
 import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi import Depends, FastAPI, HTTPException, Security, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -42,7 +46,22 @@ def require_role(*roles: str):
     return checker
 
 
-app = FastAPI(title="Enterprise AI Agent Platform", version="0.3.0")
+# --- Audit log (JSON lines) ---
+AUDIT_PATH = os.getenv("AUDIT_LOG_PATH", "/data/audit.jsonl")
+
+
+def audit(event: str, role: str, detail: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(AUDIT_PATH) or ".", exist_ok=True)
+        entry = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                 "event": event, "role": role, **detail}
+        with open(AUDIT_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+app = FastAPI(title="Enterprise AI Agent Platform", version="0.4.0")
 gateway = LLMGateway()
 store = KnowledgeStore()
 
@@ -59,6 +78,14 @@ class DocRequest(BaseModel):
     content: str
 
 
+async def _with_knowledge(message: str) -> str:
+    docs = await store.search(message, gateway=gateway)
+    if docs:
+        context = "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
+        return f"Company knowledge context:\n{context}\n\nQuestion: {message}"
+    return message
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "providers": await gateway.health(),
@@ -66,16 +93,32 @@ async def health():
 
 
 @app.post("/v1/chat", dependencies=[Depends(require_role("admin", "user"))])
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, role: str = Security(require_role("admin", "user"))):
     agent = Agent(gateway, registry)
     message = req.message
     if req.use_knowledge and config_loader.knowledge_rag_enabled():
-        docs = store.search(req.message)
-        if docs:
-            context = "\n\n".join(f"[{d.title}]\n{d.content}" for d in docs)
-            message = f"Company knowledge context:\n{context}\n\nQuestion: {req.message}"
+        message = await _with_knowledge(req.message)
     history = [Message(**m) for m in (req.history or [])]
-    return await agent.run(message, model=req.model, history=history)
+    result = await agent.run(message, model=req.model, history=history)
+    audit("chat", role, {"message": req.message[:500],
+                         "tools_used": [s.get("tool") for s in result.get("steps", [])]})
+    return result
+
+
+@app.post("/v1/chat/stream", dependencies=[Depends(require_role("admin", "user"))])
+async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin", "user"))):
+    agent = Agent(gateway, registry)
+    message = req.message
+    if req.use_knowledge and config_loader.knowledge_rag_enabled():
+        message = await _with_knowledge(req.message)
+    history = [Message(**m) for m in (req.history or [])]
+    audit("chat_stream", role, {"message": req.message[:500]})
+
+    async def event_source():
+        async for event in agent.run_stream(message, model=req.model, history=history):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")
 
 
 @app.get("/v1/tools", dependencies=[Depends(require_role("admin", "user"))])
@@ -85,12 +128,55 @@ async def list_tools():
 
 @app.get("/v1/knowledge", dependencies=[Depends(require_role("admin", "user"))])
 async def list_docs():
-    return store.list()
+    return [{"id": d.id, "title": d.title, "has_embedding": bool(d.embedding),
+             "chars": len(d.content)} for d in store.list()]
 
 
 @app.post("/v1/knowledge", dependencies=[Depends(require_role("admin"))])
 async def add_doc(req: DocRequest):
-    return store.add(req.title, req.content)
+    doc = store.add(req.title, req.content)
+    await store.embed_document(doc, gateway)
+    return {"id": doc.id, "title": doc.title, "embedded": bool(doc.embedding)}
+
+
+def _extract_text(filename: str, data: bytes) -> str:
+    name = filename.lower()
+    if name.endswith((".txt", ".md", ".csv", ".json", ".log")):
+        return data.decode("utf-8", errors="replace")
+    if name.endswith(".pdf"):
+        from pypdf import PdfReader
+        import io
+        reader = PdfReader(io.BytesIO(data))
+        return "\n".join((p.extract_text() or "") for p in reader.pages)
+    if name.endswith(".docx"):
+        import docx
+        import io
+        d = docx.Document(io.BytesIO(data))
+        return "\n".join(p.text for p in d.paragraphs)
+    raise ValueError(f"Unsupported file type: {filename} (use .txt .md .csv .pdf .docx)")
+
+
+@app.post("/v1/knowledge/upload", dependencies=[Depends(require_role("admin"))])
+async def upload_doc(file: UploadFile, role: str = Security(require_role("admin"))):
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
+    try:
+        text = _extract_text(file.filename or "document", data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="No text could be extracted from this file")
+    # split into ~3000-char chunks so retrieval stays focused
+    chunks = [text[i:i + 3000] for i in range(0, len(text), 3000)]
+    ids = []
+    for i, chunk in enumerate(chunks):
+        title = f"{file.filename}" + (f" (part {i + 1}/{len(chunks)})" if len(chunks) > 1 else "")
+        doc = store.add(title, chunk)
+        await store.embed_document(doc, gateway)
+        ids.append(doc.id)
+    audit("knowledge_upload", role, {"file": file.filename, "chunks": len(ids)})
+    return {"file": file.filename, "chunks": len(ids), "ids": ids}
 
 
 @app.delete("/v1/knowledge/{doc_id}", dependencies=[Depends(require_role("admin"))])
@@ -107,16 +193,26 @@ async def rotate_key(role: str = "user"):
     return {"api_key": key, "role": role}
 
 
+@app.get("/v1/admin/audit", dependencies=[Depends(require_role("admin"))])
+async def get_audit(limit: int = 100):
+    if not os.path.exists(AUDIT_PATH):
+        return []
+    with open(AUDIT_PATH, encoding="utf-8") as f:
+        lines = f.readlines()[-limit:]
+    return [json.loads(line) for line in lines if line.strip()]
+
+
 class AccountingQuery(BaseModel):
     query: str
     params: dict | None = None
 
 
 @app.post("/v1/accounting/query", dependencies=[Depends(require_role("admin"))])
-async def accounting_query(req: AccountingQuery):
+async def accounting_query(req: AccountingQuery, role: str = Security(require_role("admin"))):
     """Run a whitelisted read-only accounting query (admin only)."""
     if req.query not in config_loader.allowed_accounting_queries():
         raise HTTPException(status_code=403, detail=f"Query '{req.query}' is not allowed by settings")
+    audit("accounting_query", role, {"query": req.query, "params": req.params})
     try:
         return accounting_db.run(req.query, **(req.params or {}))
     except (RuntimeError, ValueError, PermissionError) as e:
