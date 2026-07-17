@@ -16,10 +16,25 @@ import express from 'express';
 
 // --- Config ---
 const AGENT_URL = process.env.AGENT_URL || 'http://agent:8000';
-const AGENT_API_KEY = process.env.AGENT_API_KEY || 'dev-admin-key';
+const WHATSAPP_ENABLED = (process.env.WHATSAPP_ENABLED || 'true') === 'true';
+const ROLE = process.env.WHATSAPP_ROLE || 'user'; // which API key to use
+const AGENT_API_KEY = ROLE === 'admin'
+  ? (process.env.ADMIN_KEY || 'dev-admin-key')
+  : (process.env.USER_KEY || 'dev-user-key');
 const PORT = process.env.WHATSAPP_PORT || 3001;
 const PREFIX = process.env.BOT_PREFIX || ''; // e.g. "!ai " to only reply when prefixed; empty = reply to all
 const IGNORE_GROUPS = process.env.IGNORE_GROUPS !== 'false';
+
+// --- Tiny web UI for QR scanning + status ---
+const app = express();
+
+if (!WHATSAPP_ENABLED) {
+  app.get('/', (req, res) => res.send(
+    '<html><body style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;height:100vh"><h1>WhatsApp bridge is disabled (WHATSAPP_ENABLED=false)</h1></body></html>'
+  ));
+  app.get('/status', (req, res) => res.json({ status: 'disabled' }));
+  app.listen(PORT, () => console.log(`WhatsApp disabled — status page on :${PORT}`));
+} else {
 
 // --- State ---
 let qrDataUrl = null;
@@ -87,9 +102,6 @@ client.on('message', async (msg) => {
 
 client.initialize();
 
-// --- Tiny web UI for QR scanning + status ---
-const app = express();
-
 app.get('/', (req, res) => {
   if (status === 'ready') {
     res.send(`<html><body style="font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;justify-content:center;align-items:center;height:100vh">
@@ -110,3 +122,4 @@ app.get('/', (req, res) => {
 app.get('/status', (req, res) => res.json({ status }));
 
 app.listen(PORT, () => console.log(`QR web UI on http://localhost:${PORT}`));
+}
