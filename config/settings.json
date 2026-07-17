@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "permissions": {
+    "web_search": true,
+    "calculator": true,
+    "get_current_time": true,
+    "read_file": false,
+    "accounting_tools": true,
+    "knowledge_rag": true
+  },
+  "accounting": {
+    "enabled": false,
+    "read_only": true,
+    "allowed_queries": [
+      "sales_summary",
+      "revenue_by_month",
+      "top_customers",
+      "expenses_summary",
+      "invoice_lookup",
+      "cash_balance"
+    ]
+  }
+}
