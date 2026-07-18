@@ -1,28 +1,38 @@
 {
   "version": 4,
   "llm": {
-    "default_model": "openai:deepseek-chat"
+    "default_model": "ollama:qwen2.5:7b"
   },
   "agent": {
     "name": "Enterprise AI Agent",
     "language": "auto",
-    "personality": "مساعد مؤسسي محترف ومختصر"
+    "personality": "a professional, concise enterprise assistant"
   },
   "security": {
     "note": "admin = full access, user = chat + read only"
   },
   "channels": {
     "whatsapp": {
-      "role": "admin",
-      "allowed": ""
+      "role": "user"
     },
     "telegram": {
-      "enabled": false
+      "enabled": true,
+      "allowed": "y"
     }
   },
   "accounting": {
-    "enabled": false,
-    "read_only": true
+    "enabled": true,
+    "read_only": true,
+    "allowed_queries": [
+      "sales_summary",
+      "revenue_by_month",
+      "top_customers",
+      "expenses_summary",
+      "invoice_lookup",
+      "cash_balance",
+      "vendor_balances",
+      "sales_by_item"
+    ]
   },
   "permissions": {
     "web_search": true,
@@ -32,7 +42,7 @@
     "search_conversations": true,
     "generate_report": true,
     "list_reports": true,
-    "accounting_tools": false,
+    "accounting_tools": true,
     "knowledge_rag": true
   }
 }
