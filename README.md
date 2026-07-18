@@ -12,23 +12,30 @@ A self-hosted, open-source AI agent platform for companies — inspired by OpenC
 - **Audit log** — every chat, upload, and accounting query is logged (admin-only access)
 - **Accounting integration (ERP)** — connects read-only to your accounting database (Onyx Pro / SQL Server) so the agent answers "how much did we sell this month?", "top customers?", "cash balance?" — see [docs/ONYX_SETUP.md](docs/ONYX_SETUP.md)
 - **WhatsApp integration** — customers/staff chat with the agent on WhatsApp; login once via QR code (like WhatsApp Web) — see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)
+- **Telegram channel** — optional Telegram bot (token from @BotFather) with user whitelist; starts automatically with `start.py` when enabled
+- **Agent identity** — give the agent a name, answer language (auto/Arabic/English), and personality from the wizard; injected into the system prompt
 - **Role-based access** — `admin` and `user` roles via API keys (SSO/LDAP-ready design)
 - **Bilingual dashboard** — Arabic (RTL) / English chat UI served by the API, no separate frontend build
 - **One-command launcher** — `python start.py` does everything: wizard, deps, agent, WhatsApp with QR in the terminal
 - **Docker deploy** — Docker Compose with Ollama included
-- **Interactive setup wizard** — `python setup.py` asks about everything (AI model, WhatsApp, accounting, what the agent may read/do) and generates `.env` + `config/settings.json`
+- **Guided onboarding wizard** — `python setup.py` (OpenClaw/Hermes-style): welcome screen, progress bar, 7 steps — AI model (with live key test), agent identity, security keys, channels (WhatsApp QR + Telegram), accounting, permissions — and generates `.env` + `config/settings.json`
 
 ## Architecture
 
 ```
-WhatsApp ──▶ whatsapp bridge (QR login)
-                  │
-Dashboard ────────┼──────▶ FastAPI API (auth + RBAC + permissions + audit)
- (AR/EN UI)       │              │
-                  │              ├──▶ Agent (ReAct, streaming) ──▶ Tools (web · calc · files · accounting)
-                  │              ├──▶ LLM Gateway ──▶ Ollama (local) / OpenAI-compatible (cloud)
-                  │              ├──▶ Knowledge Store (PDF/Word upload, semantic + keyword search)
-                  │              └──▶ Accounting Connector ──▶ Onyx Pro DB (SQL Server, read-only)
+┌────────────┐     ┌──────────────┐     ┌─────────────────┐
+│ Dashboard  │────▶│  FastAPI API  │────▶│  Agent (ReAct)  │
+│ (chat UI)  │     │  auth + RBAC  │     └───────┬─────────┘
+└────────────┘     └──────┬───────┘             │
+                          │            ┌────────▼────────┐
+                   ┌──────▼──────┐     │  Tool Registry  │
+                   │ LLM Gateway │     │ search · calc · │
+                   │ ollama/openai     │ files · custom  │
+                   └──────┬──────┘     └─────────────────┘
+                          │            ┌─────────────────┐
+                   Ollama / Cloud      │ Knowledge Store │
+                                        │  (RAG, /data)   │
+                                        └─────────────────┘
 ```
 
 ## Quick start
@@ -58,6 +65,9 @@ docker compose up -d --build
 docker exec -it deploy-ollama-1 ollama pull qwen2.5:7b
 ```
 
+- Web dashboard: **http://localhost:8000** (log in with the admin key from the wizard)
+- WhatsApp QR scan page: **http://localhost:3001**
+
 Full installation guide: [docs/SETUP.md](docs/SETUP.md)
 
 ### Local development (no Docker)
@@ -72,14 +82,17 @@ uvicorn api.main:app --reload
 
 | Variable | Default | Description |
 |---|---|---|
-| `ADMIN_KEY` / `USER_KEY` | generated | API keys per role |
+| `API_KEYS` | `admin:dev-admin-key` | Comma-separated `role:key` pairs. Roles: `admin`, `user` |
 | `DEFAULT_MODEL` | `ollama:qwen2.5:7b` | Model as `provider:name` |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
-| `OPENAI_BASE_URL` / `OPENAI_API_KEY` | — | Cloud provider (DeepSeek/OpenAI/...) |
-| `EMBED_MODEL` / `OPENAI_EMBED_MODEL` | `nomic-embed-text` / `text-embedding-3-small` | Embedding models for semantic search |
-| `ACCOUNTING_DB_URL` | — | Accounting DB (SQL Server for Onyx Pro) |
-| `WHATSAPP_ENABLED` / `BOT_PREFIX` / `WHATSAPP_ROLE` | `true` / `!ai ` / `user` | WhatsApp bridge controls |
-| `AUDIT_LOG_PATH` | `/data/audit.jsonl` | Audit log file |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
+| `OPENAI_API_KEY` | — | Key for the cloud provider |
+| `MEMORY_DB_PATH` | `/data/knowledge.json` | Knowledge store file |
+| `ACCOUNTING_DB_URL` | — | Accounting DB (SQLAlchemy URL, SQL Server for Onyx Pro) |
+| `ALLOWED_NUMBERS` | — (everyone) | WhatsApp whitelist, comma-separated international numbers |
+| `TELEGRAM_ENABLED` | `false` | Start the Telegram bridge with `start.py` |
+| `TELEGRAM_BOT_TOKEN` | — | Bot token from @BotFather |
+| `TELEGRAM_ALLOWED` | — (everyone) | Telegram whitelist: user IDs or @usernames, comma-separated |
 
 Switch providers per request: `{"message": "...", "model": "openai:deepseek-chat"}`.
 
@@ -102,9 +115,9 @@ Example:
 
 ```bash
 curl -X POST http://localhost:8000/v1/chat \
-  -H "X-API-Key: <admin-key>" \
+  -H "X-API-Key: dev-admin-key" \
   -H "Content-Type: application/json" \
-  -d '{"message": "How much did we sell this month?"}'
+  -d '{"message": "Search the web for the latest Qwen model and summarize it"}'
 ```
 
 ## Adding a custom tool
@@ -130,7 +143,6 @@ The agent discovers and can call it immediately — no other changes needed.
 - [x] Streaming responses (SSE)
 - [x] Audit log per user (`/v1/admin/audit`)
 - [x] Arabic / English dashboard (RTL)
-- [x] One-command launcher (`start.py`) with terminal QR
 - [ ] Multi-agent orchestration and scheduled tasks
 - [ ] SSO / LDAP authentication
 
