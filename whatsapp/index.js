@@ -79,8 +79,14 @@ client.on('disconnected', (reason) => {
 
 client.on('message', async (msg) => {
   try {
-    if (msg.fromMe) return;
-    if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) return;
+    if (msg.fromMe) {
+      console.log('[msg] ignored: sent FROM the bot account itself (fromMe). Message the bot from a DIFFERENT number.');
+      return;
+    }
+    if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) {
+      console.log('[msg] ignored: group message (IGNORE_GROUPS=true)');
+      return;
+    }
 
     console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
 
