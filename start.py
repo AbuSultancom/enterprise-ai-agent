@@ -201,6 +201,33 @@ def check_node() -> str | None:
     return node
 
 
+def check_update() -> None:
+    """Check GitHub for newer version."""
+    import json as _json
+    import urllib.request as _urllib
+    try:
+        req = _urllib.Request(
+            "https://api.github.com/repos/AbuSultancom/enterprise-ai-agent/releases/latest",
+            headers={"User-Agent": "EnterpriseAI/0.5", "Accept": "application/json"},
+        )
+        with _urllib.urlopen(req, timeout=5) as r:
+            data = _json.loads(r.read())
+        latest = data.get("tag_name", "").lstrip("v")
+        if latest and latest > VERSION:
+            print(c(f"\n  ╔══ 🚀  UPDATE AVAILABLE ══╗", "m", "bold"))
+            print(c(f"  ║  Current: v{VERSION}", "dim"))
+            print(c(f"  ║  Latest:  v{latest}", "g"))
+            print(c(f"  ║  {data.get('html_url', '')}", "c", "dim"))
+            print(c(f"  ╚═══════════════════════════╝", "m"))
+            print()
+            print(c(f"  Run this command to update:", "y"))
+            print(c(f"    git pull origin main", "c", "bold"))
+            print(c(f"    pip install -r requirements.txt", "c", "bold"))
+            print()
+    except Exception:
+        pass
+
+
 def wait_for_api(port: int, timeout: int = 15) -> bool:
     """Wait until the API health endpoint responds."""
     import http.client
