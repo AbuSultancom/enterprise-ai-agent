@@ -523,14 +523,8 @@ def step_channels(env: dict, settings: dict) -> None:
             L["wa_role_admin"],
         ])
         env["WHATSAPP_ROLE"] = "user" if role_choice == 0 else "admin"
-        info(L["wa_allowed"])
-        info(L["wa_allowed_example"])
-        nums = ask(L["wa_allowed"], "")
-        env["ALLOWED_NUMBERS"] = ",".join(_re.sub(r"\D", "", n) for n in nums.split(",") if n.strip())
-        env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
         settings["channels"]["whatsapp"] = {
             "role": env["WHATSAPP_ROLE"],
-            "allowed": env["ALLOWED_NUMBERS"],
         }
         ok(f"{L['wa_ok']}: prefix '{env['BOT_PREFIX'] or '(all)'}' · role {env['WHATSAPP_ROLE']}")
     else:
@@ -832,6 +826,16 @@ def _link_whatsapp(env: dict) -> None:
         print()
         if linked:
             ok(L["link_ok"])
+            # Ask for allowed numbers NOW (after QR scan)
+            print()
+            info(L["wa_allowed"])
+            info(L["wa_allowed_example"])
+            nums = ask(L["wa_allowed"], "")
+            env["ALLOWED_NUMBERS"] = ",".join(_re.sub(r"\D", "", n) for n in nums.split(",") if n.strip())
+            env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
+            # Update .env with the new numbers
+            _write_files(env, settings)
+            ok("✅ تم حفظ الأرقام المسموحة")
         else:
             warn(L["link_timeout"])
     finally:
