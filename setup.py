@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
 """
-Enterprise AI Agent — Onboarding Wizard (v3)
+Enterprise AI Agent — Onboarding Wizard (v4)
 ============================================
-Inspired by OpenClaw's `onboard` and Hermes Agent's `setup` — one guided flow
-that configures EVERYTHING:
+Clean, modern, bilingual (AR/EN) setup experience.
 
-    [1/7] Model provider  (with live test)
-    [2/7] Agent identity  (name, language, personality)
-    [3/7] Security        (API keys)
-    [4/7] Channels        (WhatsApp + Telegram + allowed contacts)
-    [5/7] Accounting      (Onyx Pro, with live server test)
-    [6/7] Tools & permissions
-    [7/7] Finish          (save + optional WhatsApp QR linking + self-test)
-
-Run:  python setup.py        (pure standard library)
+Run:  python setup.py
 """
 from __future__ import annotations
 
@@ -34,108 +25,360 @@ ENV_FILE = os.path.join(ROOT, ".env")
 SETTINGS_FILE = os.path.join(ROOT, "config", "settings.json")
 TOTAL_STEPS = 7
 
-# ------------------------------------------------------------------ palette
-C = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
-     "green": "\033[92m", "yellow": "\033[93m", "blue": "\033[94m",
-     "cyan": "\033[96m", "red": "\033[91m"}
-ANSI = _re.compile(r"\033\[[0-9;]*m")
+# ─── ANSI palette ────────────────────────────────────────────────
+C = {
+    "reset": "\033[0m",
+    "bold": "\033[1m",
+    "dim": "\033[2m",
+    "green": "\033[92m",
+    "yellow": "\033[93m",
+    "blue": "\033[94m",
+    "cyan": "\033[96m",
+    "red": "\033[91m",
+    "magenta": "\033[95m",
+}
+ANSI_RE = _re.compile(r"\033\[[0-9;]*m")
 
 
-def c(text: str, *colors: str) -> str:
-    if not colors:
+def color(text: str, *styles: str) -> str:
+    if not styles:
         return text
-    return "".join(C.get(x, "") for x in colors) + text + C["reset"]
+    return "".join(C.get(s, "") for s in styles) + text + C["reset"]
 
 
 def clear() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
 
-BANNER = r"""
-  _____       _                       _    ___
- | ____|_ __ | |_ ___ _ __ _ __  ___ / \  |_ _|
- |  _| | '_ \| __/ _ \ '__| '_ \/ __/ _ \  | |
- | |___| | | | ||  __/ |  | |_) \__ \ ___ \ | |
- |_____|_| |_|\__\___|_|  | .__/|___/_/   \_\___|
-  Enterprise AI Agent     |_|      Onboarding
-"""
+# ─── Bilingual strings ────────────────────────────────────────────
+LANG = "ar"  # "ar" or "en" - toggle here or detect locale later
+
+STR = {
+    "ar": {
+        "welcome_title": "مرحباً بك في معالج إعداد وكيل الذكاء الاصطناعي",
+        "welcome_desc": "هذا المعالج يهيئ وكيلك في 7 خطوات خلال ~3 دقائق",
+        "steps": [
+            "مزود الذكاء — اختر الموديل (محلي أو سحاب)",
+            "هوية الوكيل — الاسم، اللغة، الشخصية",
+            "الأمان — مفاتيح API للوحة التحكم والقنوات",
+            "القنوات — واتساب، تلغرام، جهات الاتصال المسموحة",
+            "المحاسبة — ربط بقاعدة بيانات Onyx Pro",
+            "الصلاحيات — الأدوات المسموح للوكيل استخدامها",
+            "إنهاء — حفظ الإعدادات + ربط واتساب",
+        ],
+        "step_titles": [
+            "مزود الذكاء",
+            "هوية الوكيل",
+            "الأمان",
+            "القنوات",
+            "المحاسبة",
+            "الصلاحيات",
+            "إنهاء",
+        ],
+        "press_enter": "اضغط Enter للبدء...",
+        "model_prompt": "أي مزود تريد استخدامه؟",
+        "model_ollama": "Ollama — محلي، مجاني، خصوصي (موصى به)",
+        "model_deepseek": "DeepSeek — سحاب، رخيص وقوي",
+        "model_openai": "OpenAI — سحاب (GPT-4o...)",
+        "model_other": "نقطة نهاية متوافقة مع OpenAI (Qwen / vLLM...)",
+        "ollama_model": "اسم الموديل في Ollama",
+        "ollama_url": "رابط Ollama",
+        "ollama_check_ok": "Ollama يعمل",
+        "ollama_check_fail": "لا يمكن الوصول إلى Ollama",
+        "api_base": "رابط API الأساسي",
+        "api_key": "مفتاح API",
+        "model_name": "اسم الموديل",
+        "api_check_ok": "مفتاح API يعمل",
+        "api_check_fail": "تعذر التحقق من المفتاح — تم الحفظ على أي حال",
+        "no_api_key": "لم تدخل مفتاح API — المكالمات السحابية ستفشل حتى تضبط OPENAI_API_KEY",
+        "model_ok": "الموديل",
+        "agent_name": "اسم الوكيل (الذي يظهر للمستخدمين)",
+        "agent_lang": "بأي لغة يجب أن يرد الوكيل؟",
+        "lang_auto": "نفس لغة المستخدم (تلقائي)",
+        "lang_ar": "العربية — يرد بالعربية دائماً",
+        "lang_en": "English — always answers in English",
+        "agent_personality": "الشخصية / التعليمات (سطر واحد)",
+        "personality_default": "مساعد مؤسسي محترف ومختصر",
+        "identity_ok": "الهوية",
+        "gen_keys": "توليد مفاتيح API عشوائية آمنة؟",
+        "keys_generated": "تم توليد المفاتيح (ستظهر في النهاية — احفظها)",
+        "admin_key": "مفتاح المشرف (صلاحية كاملة)",
+        "user_key": "مفتاح المستخدم (محادثة فقط)",
+        "enable_whatsapp": "تفعيل قناة واتساب؟ (تسجيل دخول QR)",
+        "wa_warn": "بروتوكول واتساب غير رسمي — استخدم رقماً مخصصاً للبوت",
+        "wa_prefix": "يرد فقط على الرسائل التي تبدأ ببادئة؟ (اترك فارغاً للكل)",
+        "wa_ignore_groups": "تجاهل المجموعات؟",
+        "wa_role_prompt": "أي صلاحية لمستخدمي واتساب؟",
+        "wa_role_user": "user — محادثة وأدوات آمنة فقط (موصى به)",
+        "wa_role_admin": "admin — كل شيء بما في ذلك المحاسبة (للمالك فقط)",
+        "wa_allowed": "الأرقام المسموحة (دولي، مفصول بفاصلة؛ فارغ = الجميع)",
+        "wa_allowed_example": "مثال: 967712345678,966501234567",
+        "wa_ok": "واتساب",
+        "enable_telegram": "تفعيل قناة تلغرام؟ (بوت Token)",
+        "tg_create_hint": "أنشئ بوتاً مع @BotFather على تلغرام لتحصل على Token",
+        "tg_token": "Token البوت",
+        "tg_check_ok": "Token البوت صحيح",
+        "tg_check_fail": "تعذر التحقق من Token — تم الحفظ على أي حال",
+        "tg_no_token": "لم تدخل Token — بوت تلغرام لن يعمل حتى تضبط TELEGRAM_BOT_TOKEN",
+        "tg_allowed": "مستخدمي تلغرام المسموحين (IDs أو @usernames، فارغ = الجميع)",
+        "tg_ok": "تلغرام",
+        "enable_accounting": "ربط قاعدة بيانات المحاسبة الآن؟",
+        "acc_skip": "تم التجاهل. اضبط ACCOUNTING_DB_URL في .env لاحقاً",
+        "acc_host": "خادم SQL Server",
+        "acc_port": "المنفذ",
+        "acc_db": "اسم قاعدة البيانات",
+        "acc_user": "مستخدم DB (للقراءة فقط!)",
+        "acc_pass": "كلمة مرور DB",
+        "acc_server_ok": "الخادم يمكن الوصول إليه",
+        "acc_server_fail": "لا يمكن الوصول إلى الخادم — تم الحفظ على أي حال",
+        "acc_warn": "عدل أسماء الجداول في connectors/accounting.py حسب هيكل Onyx لديك",
+        "acc_ok": "تم حفظ اتصال المحاسبة",
+        "perm_web": "السماح بالبحث في الويب؟",
+        "perm_calc": "السماح بالآلة الحاسبة؟",
+        "perm_time": "السماح بالتاريخ والوقت؟",
+        "perm_file": "السماح بقراءة الملفات؟",
+        "perm_accounting": "السماح للوكيل باستعلام بيانات المحاسبة؟",
+        "perm_knowledge": "استخدام قاعدة المعرفة (مستندات الشركة)؟",
+        "perm_conversations": "السماح للوكيل بالبحث في المحادثات السابقة؟",
+        "perm_reports": "السماح بإنشاء وعرض التقارير؟",
+        "perm_enabled": "التفعيلات",
+        "link_wa_now": "ربط واتساب الآن؟ (سيظهر QR هنا)",
+        "link_wa_skip": "تم التجاهل. سيظهر QR عند أول تشغيل لـ start.py",
+        "link_wa_no_node": "Node.js غير مثبت — لا يمكن ربط واتساب هنا",
+        "node_hint": "ثبته من https://nodejs.org ثم اركض: python start.py",
+        "npm_install": "تثبيت اعتماديات واتساب",
+        "npm_fail": "فشل تثبيت npm. اركض: cd whatsapp && npm install يدوياً",
+        "link_start": "تشغيل الجسر... سيظهر QR أدناه",
+        "link_phone_hint": "على هاتفك: واتساب → الأجهزة المرتبطة → ربط جهاز",
+        "link_wait": "الانتظار حتى 3 دقائق للفحص",
+        "link_ok": "واتساب مرتبط بنجاح!",
+        "link_timeout": "لم يتم الربط بعد (انتهت المهلة أو توقف الجسر). لا مشكلة: اركض start.py وسيظهر QR مجدداً",
+        "summary_title": "✅  تم الإعداد بنجاح",
+        "keys_warn": "🔑  مفاتيح API — احفظها",
+        "start_cmd": "🚀  شغّل كل شيء بأمر واحد",
+        "yes": "نعم",
+        "no": "لا",
+        "choose": "اختر",
+        "aborted": "تم الإلغاء — لم يتم حفظ أي شيء.",
+        "admin": "مشرف",
+        "user": "مستخدم",
+    },
+    "en": {
+        "welcome_title": "Welcome! Configure your AI agent in ~3 minutes",
+        "welcome_desc": "This wizard will set up everything in 7 steps:",
+        "steps": [
+            "Model provider — local or cloud model",
+            "Agent identity — name, language, personality",
+            "Security — API keys for dashboard & channels",
+            "Channels — WhatsApp, Telegram, allowed contacts",
+            "Accounting — Onyx Pro read-only connection",
+            "Permissions — tools the agent may use",
+            "Finish — save + optional WhatsApp QR linking",
+        ],
+        "step_titles": [
+            "Model Provider",
+            "Agent Identity",
+            "Security",
+            "Channels",
+            "Accounting",
+            "Permissions",
+            "Finish",
+        ],
+        "press_enter": "Press Enter to begin...",
+        "model_prompt": "Which provider do you want to use?",
+        "model_ollama": "Ollama — local, private, free (recommended)",
+        "model_deepseek": "DeepSeek — cloud API, cheap & strong",
+        "model_openai": "OpenAI — cloud API (GPT-4o etc.)",
+        "model_other": "Other OpenAI-compatible endpoint (Qwen / vLLM...)",
+        "ollama_model": "Ollama model name",
+        "ollama_url": "Ollama URL",
+        "ollama_check_ok": "Ollama is reachable",
+        "ollama_check_fail": "Ollama not reachable",
+        "api_base": "API base URL",
+        "api_key": "API key",
+        "model_name": "Model name",
+        "api_check_ok": "API key works",
+        "api_check_fail": "Could not verify key — saved anyway",
+        "no_api_key": "No API key entered — cloud calls will fail until you set OPENAI_API_KEY",
+        "model_ok": "Model",
+        "agent_name": "Agent name (shown to users)",
+        "agent_lang": "Which language should the agent answer in?",
+        "lang_auto": "Same as the user's message (auto)",
+        "lang_ar": "Arabic — always answers in Arabic",
+        "lang_en": "English — always answers in English",
+        "agent_personality": "Personality / instructions (one line)",
+        "personality_default": "a professional, concise enterprise assistant",
+        "identity_ok": "Identity",
+        "gen_keys": "Generate secure random API keys for you?",
+        "keys_generated": "Keys generated (shown at the end — save them)",
+        "admin_key": "Admin key (full access)",
+        "user_key": "User key (chat only)",
+        "enable_whatsapp": "Enable the WhatsApp channel? (QR login)",
+        "wa_warn": "QR login uses the UNOFFICIAL WhatsApp Web protocol — use a dedicated number.",
+        "wa_prefix": "Reply only to messages starting with a prefix? (empty = all)",
+        "wa_ignore_groups": "Ignore group chats?",
+        "wa_role_prompt": "Which role should WhatsApp users get?",
+        "wa_role_user": "user — chat & safe tools only (recommended)",
+        "wa_role_admin": "admin — everything including accounting queries (owner only)",
+        "wa_allowed": "Allowed WhatsApp numbers (international format, comma-separated; empty = everyone)",
+        "wa_allowed_example": "Example: 967712345678,8613800138000",
+        "wa_ok": "WhatsApp",
+        "enable_telegram": "Enable the Telegram channel? (bot token)",
+        "tg_create_hint": "Create a bot with @BotFather on Telegram to get a token.",
+        "tg_token": "Telegram bot token",
+        "tg_check_ok": "Bot token verified",
+        "tg_check_fail": "Could not verify token — saved anyway",
+        "tg_no_token": "No token entered — Telegram bridge will not start until you set TELEGRAM_BOT_TOKEN",
+        "tg_allowed": "Allowed Telegram users (IDs or @usernames, comma; empty = everyone)",
+        "tg_ok": "Telegram",
+        "enable_accounting": "Connect the accounting database now?",
+        "acc_skip": "Skipped. Set ACCOUNTING_DB_URL in .env later.",
+        "acc_host": "SQL Server host/IP",
+        "acc_port": "Port",
+        "acc_db": "Database name",
+        "acc_user": "DB user (read-only!)",
+        "acc_pass": "DB password",
+        "acc_server_ok": "Server reachable",
+        "acc_server_fail": "Cannot reach server — saved anyway; check network/firewall",
+        "acc_warn": "Adapt table names in connectors/accounting.py to your Onyx schema.",
+        "acc_ok": "Accounting connection string saved.",
+        "perm_web": "Allow web search?",
+        "perm_calc": "Allow calculator?",
+        "perm_time": "Allow date/time?",
+        "perm_file": "Allow reading files?",
+        "perm_accounting": "Allow the agent to query accounting data?",
+        "perm_knowledge": "Use the knowledge base (company documents)?",
+        "perm_conversations": "Allow the agent to search past conversations?",
+        "perm_reports": "Allow creating & viewing reports?",
+        "perm_enabled": "Enabled",
+        "link_wa_now": "Link your WhatsApp number NOW? (QR will appear here)",
+        "link_wa_skip": "Skipped. The QR will appear on the first 'python start.py' run instead.",
+        "link_wa_no_node": "Node.js is not installed — cannot link WhatsApp here.",
+        "node_hint": "Install it from https://nodejs.org then run: python start.py",
+        "npm_install": "Installing WhatsApp bridge dependencies",
+        "npm_fail": "npm install failed. Run 'cd whatsapp && npm install' manually.",
+        "link_start": "Starting the bridge... the QR code will appear below.",
+        "link_phone_hint": "On your phone: WhatsApp → Linked devices → Link a device",
+        "link_wait": "Waiting up to 3 minutes for you to scan.",
+        "link_ok": "WhatsApp LINKED successfully! Session saved — no QR needed next time.",
+        "link_timeout": "Not linked yet (timeout or bridge stopped). No problem: run 'python start.py' and the QR will show again.",
+        "summary_title": "✅  SETUP COMPLETE",
+        "keys_warn": "🔑  YOUR API KEYS — SAVE THESE:",
+        "start_cmd": "🚀  START EVERYTHING WITH ONE COMMAND:",
+        "yes": "yes",
+        "no": "no",
+        "choose": "Choose",
+        "aborted": "Aborted — nothing was saved.",
+        "admin": "admin",
+        "user": "user",
+    },
+}
+
+L = STR[LANG]
+
+
+# ─── UI helpers ───────────────────────────────────────────────────
+def box_top(width: int = 60) -> str:
+    return color("  ┌" + "─" * width + "┐", "cyan")
+
+
+def box_mid(width: int = 60) -> str:
+    return color("  ├" + "─" * width + "┤", "cyan")
+
+
+def box_bot(width: int = 60) -> str:
+    return color("  └" + "─" * width + "┘", "cyan")
+
+
+def box_line(text: str, width: int = 60) -> str:
+    plain = ANSI_RE.sub("", text)
+    pad = width - len(plain)
+    return color("  │ ", "cyan") + text + " " * max(pad, 0) + color(" │", "cyan")
+
+
+def banner() -> None:
+    clear()
+    print(color(r"""
+     ___                   _                ___
+    | __|_ ___ __ _ _ __  (_)___ _ _  ___  |_ _|
+    | _|\ \ / '_ \ '_ \ | | / -_) ' \/ -_)  | |
+    |___/_\_\ .__/ .__/_|_|_\___|_||_\___| |___|
+            |_|  |_|
+    """, "cyan", "bold"))
+    print(color(f"   {L['welcome_title']}", "bold"))
+    print()
+    for i, s in enumerate(L["steps"], 1):
+        print(color(f"     {i:>2}. {s}", "dim"))
+    print()
+    print(color(f"   {L['press_enter']}", "yellow"))
+    input(color("   ▶ ", "green", "bold"))
 
 
 def progress_bar(done: int) -> str:
-    filled = int(20 * done / TOTAL_STEPS)
-    return c("█" * filled, "green") + c("░" * (20 - filled), "dim")
+    filled = done * 20 // TOTAL_STEPS
+    bar = color("█" * filled, "green") + color("░" * (20 - filled), "dim")
+    pct = done * 100 // TOTAL_STEPS
+    return f"  {bar}  {color(str(pct) + '%', 'bold')}  "
 
 
-def section(num: int, title: str, subtitle: str = "") -> None:
+def section(num: int, subtitle: str = "") -> None:
     print()
-    print(f"  {progress_bar(num - 1)}  {c(f'Step {num}/{TOTAL_STEPS}', 'dim')}")
-    print(c("  ┌" + "─" * 58 + "┐", "blue"))
-    print(c("  │ ", "blue") + c(f" {title}".ljust(57), "bold") + c("│", "blue"))
+    pbar = progress_bar(num - 1)
+    title = L["step_titles"][num - 1]
+    print(pbar + color(f"  ═══ {title} ═══", "bold"))
     if subtitle:
-        print(c("  │ ", "blue") + c(f" {subtitle}".ljust(57), "dim") + c("│", "blue"))
-    print(c("  └" + "─" * 58 + "┘", "blue"))
-
-
-def welcome() -> None:
-    clear()
-    print(c(BANNER, "cyan"))
-    print(c("  Welcome! This wizard configures your AI agent in ~3 minutes:", "bold"))
-    print(c("""
-    ◆ Model provider — Ollama locally or a cloud API (with live test)
-    ◆ Agent identity — name, answer language, personality
-    ◆ Security — API keys for dashboard & channels
-    ◆ Channels — WhatsApp (QR) + Telegram (bot token) + allowed contacts
-    ◆ Accounting — Onyx Pro read-only connection
-    ◆ Tools — what the agent is allowed to read & do
-    ◆ Finish — link WhatsApp with a QR scan, right here
-""", "dim"))
-    print(c("  Press Enter to accept any [default] · Ctrl+C to abort anytime", "yellow"))
-    input(f"\n  {c('▶', 'green', 'bold')} Press Enter to begin... ")
-
-
-def ask(prompt: str, default: str = "") -> str:
-    suffix = c(f" [{default}]", "dim") if default else ""
-    value = input(f"  {c('?', 'yellow', 'bold')} {prompt}{suffix}: ").strip()
-    return value or default
-
-
-def ask_yes(prompt: str, default: bool = True) -> bool:
-    hint = c("[Y/n]", "dim") if default else c("[y/N]", "dim")
-    value = input(f"  {c('?', 'yellow', 'bold')} {prompt} {hint}: ").strip().lower()
-    if not value:
-        return default
-    return value in ("y", "yes", "1", "true", "نعم")
-
-
-def ask_choice(prompt: str, choices: list[str], default: int = 0) -> int:
-    print(f"  {c('?', 'yellow', 'bold')} {prompt}")
-    for i, choice in enumerate(choices, 1):
-        if i - 1 == default:
-            print(f"    {c('●', 'green')} {c(str(i) + ')', 'green', 'bold')} {choice}")
-        else:
-            print(f"    {c('○', 'dim')} {str(i)}) {c(choice, 'dim')}")
-    while True:
-        value = input(f"    {c('›', 'cyan')} Choose [default {default + 1}]: ").strip()
-        if not value:
-            return default
-        if value.isdigit() and 1 <= int(value) <= len(choices):
-            return int(value) - 1
-        print(c("    ✗ Invalid choice, try again.", "red"))
+        print(color(f"       {subtitle}", "dim"))
+    print()
 
 
 def ok(msg: str) -> None:
-    print(f"  {c('[OK]', 'green', 'bold')} {c(msg, 'green')}")
+    print(f"  {color('✔', 'green', 'bold')} {color(msg, 'green')}")
 
 
 def warn(msg: str) -> None:
-    print(f"  {c('[!]', 'yellow', 'bold')} {c(msg, 'yellow')}")
+    print(f"  {color('⚠', 'yellow', 'bold')} {color(msg, 'yellow')}")
 
 
 def fail(msg: str) -> None:
-    print(f"  {c('[X]', 'red', 'bold')} {c(msg, 'red')}")
+    print(f"  {color('✖', 'red', 'bold')} {color(msg, 'red')}")
 
 
-# ------------------------------------------------------------- spinner/test
+def info(msg: str) -> None:
+    print(f"  {color('·', 'cyan')} {color(msg, 'dim')}")
+
+
+# ─── Input helpers ────────────────────────────────────────────────
+def ask(prompt: str, default: str = "") -> str:
+    suffix = color(f" [{default}]", "dim") if default else ""
+    val = input(f"  {color('?', 'yellow')} {prompt}{suffix}: ").strip()
+    return val or default
+
+
+def ask_yes(prompt: str, default: bool = True) -> bool:
+    hint = color("[Y/n]", "dim") if default else color("[y/N]", "dim")
+    val = input(f"  {color('?', 'yellow')} {prompt} {hint}: ").strip().lower()
+    if not val:
+        return default
+    return val in ("y", "yes", "1", "true", "نعم", "yup", "yeah")
+
+
+def ask_choice(prompt: str, choices: list[str], default: int = 0) -> int:
+    print(f"  {color('?', 'yellow')} {prompt}")
+    for i, c in enumerate(choices, 1):
+        if i - 1 == default:
+            print(f"    {color('●', 'green')} {color(str(i) + ')', 'green', 'bold')} {c}")
+        else:
+            print(f"    {color('○', 'dim')} {i}) {color(c, 'dim')}")
+    while True:
+        val = input(f"    {color('›', 'cyan')} {L['choose']} [{default + 1}]: ").strip()
+        if not val:
+            return default
+        if val.isdigit() and 1 <= int(val) <= len(choices):
+            return int(val) - 1
+        fail("❌")
+
+
+# ─── Spinner ──────────────────────────────────────────────────────
 class Spinner:
     def __init__(self, text: str):
         self.text = text
@@ -143,13 +386,13 @@ class Spinner:
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
-        frames = "|/-\\"
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
         i = 0
         while not self._stop.is_set():
-            sys.stdout.write(f"\r  {c(frames[i % len(frames)], 'cyan')} {self.text}...")
+            sys.stdout.write(f"\r  {color(frames[i % len(frames)], 'cyan')} {self.text}...")
             sys.stdout.flush()
             i += 1
-            time.sleep(0.1)
+            time.sleep(0.08)
 
     def __enter__(self):
         self._thread.start()
@@ -158,10 +401,11 @@ class Spinner:
     def __exit__(self, *args):
         self._stop.set()
         self._thread.join()
-        sys.stdout.write("\r" + " " * (len(self.text) + 12) + "\r")
+        sys.stdout.write("\r" + " " * (len(self.text) + 14) + "\r")
         sys.stdout.flush()
 
 
+# ─── Network tests ────────────────────────────────────────────────
 def test_http(url: str, headers: dict | None = None, timeout: int = 8) -> tuple[bool, str]:
     try:
         req = urllib.request.Request(url, headers=headers or {})
@@ -181,9 +425,9 @@ def test_tcp(host: str, port: int, timeout: int = 5) -> tuple[bool, str]:
 
 def npm_cmd() -> str | None:
     for name in ("npm", "npm.cmd", "npm.exe"):
-        path = shutil.which(name)
-        if path:
-            return path
+        p = shutil.which(name)
+        if p:
+            return p
     return None
 
 
@@ -191,268 +435,219 @@ def node_cmd() -> str | None:
     return shutil.which("node") or shutil.which("node.exe")
 
 
-# ---------------------------------------------------------------- sections
+# ─── Steps ────────────────────────────────────────────────────────
 def step_model(env: dict, settings: dict) -> None:
-    section(1, "Model Provider", "The agent's brain — local or cloud")
-    choice = ask_choice("Which provider do you want to use?", [
-        "Ollama — local, private, free (recommended)",
-        "DeepSeek — cloud API, cheap & strong",
-        "OpenAI — cloud API (GPT-4o etc.)",
-        "Other OpenAI-compatible endpoint (Qwen / vLLM / LM Studio...)",
+    section(1, L["steps"][0])
+    choice = ask_choice(L["model_prompt"], [
+        L["model_ollama"],
+        L["model_deepseek"],
+        L["model_openai"],
+        L["model_other"],
     ])
     if choice == 0:
-        env["DEFAULT_MODEL"] = "ollama:" + ask("Ollama model name", "qwen2.5:7b")
-        env["OLLAMA_BASE_URL"] = ask("Ollama URL", "http://localhost:11434")
-        with Spinner("Checking Ollama"):
+        env["DEFAULT_MODEL"] = "ollama:" + ask(L["ollama_model"], "qwen2.5:7b")
+        env["OLLAMA_BASE_URL"] = ask(L["ollama_url"], "http://localhost:11434")
+        with Spinner(L["ollama_check_ok"]):
             good, info = test_http(env["OLLAMA_BASE_URL"].rstrip("/") + "/api/tags")
         if good:
-            ok(f"Ollama is reachable ({info})")
+            ok(f"{L['ollama_check_ok']} ({info})")
         else:
-            warn(f"Ollama not reachable at {env['OLLAMA_BASE_URL']} ({info})")
+            warn(f"{L['ollama_check_fail']} ({info})")
     else:
-        presets = {
-            1: ("https://api.deepseek.com/v1", "deepseek-chat"),
-            2: ("https://api.openai.com/v1", "gpt-4o-mini"),
-            3: ("", ""),
-        }
+        presets = {1: ("https://api.deepseek.com/v1", "deepseek-chat"),
+                    2: ("https://api.openai.com/v1", "gpt-4o-mini"),
+                    3: ("", "")}
         base, model = presets[choice]
-        env["OPENAI_BASE_URL"] = ask("API base URL", base)
-        env["OPENAI_API_KEY"] = ask("API key")
-        env["DEFAULT_MODEL"] = "openai:" + ask("Model name", model)
+        env["OPENAI_BASE_URL"] = ask(L["api_base"], base)
+        env["OPENAI_API_KEY"] = ask(L["api_key"])
+        env["DEFAULT_MODEL"] = "openai:" + ask(L["model_name"], model)
         if env["OPENAI_API_KEY"]:
-            with Spinner("Testing API key"):
+            with Spinner(L["api_check_ok"]):
                 good, info = test_http(
                     env["OPENAI_BASE_URL"].rstrip("/") + "/models",
                     {"Authorization": f"Bearer {env['OPENAI_API_KEY']}"})
             if good:
-                ok(f"API key works ({info})")
+                ok(f"{L['api_check_ok']} ({info})")
             else:
-                warn(f"Could not verify the key ({info}) — saved anyway")
+                warn(L["api_check_fail"])
         else:
-            warn("No API key entered — cloud calls will fail until you set OPENAI_API_KEY in .env")
+            warn(L["no_api_key"])
     settings["llm"] = {"default_model": env["DEFAULT_MODEL"]}
-    ok(f"Model: {env['DEFAULT_MODEL']}")
+    ok(f"{L['model_ok']}: {env['DEFAULT_MODEL']}")
 
 
 def step_identity(env: dict, settings: dict) -> None:
-    section(2, "Agent Identity", "Name, answer language & personality")
-    name = ask("Agent name (shown to users)", "Enterprise AI Agent")
-    lang_idx = ask_choice("Which language should the agent answer in?", [
-        "Same as the user's message (auto)",
-        "Arabic — always answers in Arabic",
-        "English — always answers in English",
+    section(2, L["steps"][1])
+    name = ask(L["agent_name"], "Enterprise AI Agent")
+    lang_idx = ask_choice(L["agent_lang"], [
+        L["lang_auto"], L["lang_ar"], L["lang_en"],
     ])
     lang = ["auto", "ar", "en"][lang_idx]
-    personality = ask("Personality / instructions (one line)",
-                      "a professional, concise enterprise assistant")
+    personality = ask(L["agent_personality"], L["personality_default"])
     settings["agent"] = {"name": name, "language": lang, "personality": personality}
-    ok(f"Identity: {name} · language: {lang}")
+    ok(f"{L['identity_ok']}: {name} · {lang}")
 
 
 def step_security(env: dict, settings: dict) -> None:
-    section(3, "Security", "API keys for dashboard & channels")
-    if ask_yes("Generate secure random API keys for you?", True):
+    section(3, L["steps"][2])
+    if ask_yes(L["gen_keys"], True):
         env["ADMIN_KEY"] = secrets.token_urlsafe(24)
         env["USER_KEY"] = secrets.token_urlsafe(24)
-        ok("Keys generated (shown once at the end — save them)")
+        ok(L["keys_generated"])
     else:
-        env["ADMIN_KEY"] = ask("Admin key (full access)", "dev-admin-key")
-        env["USER_KEY"] = ask("User key (chat only)", "dev-user-key")
+        env["ADMIN_KEY"] = ask(L["admin_key"], "dev-admin-key")
+        env["USER_KEY"] = ask(L["user_key"], "dev-user-key")
     settings["security"] = {"note": "admin = full access, user = chat + read only"}
 
 
 def step_channels(env: dict, settings: dict) -> None:
-    section(4, "Channels", "WhatsApp + Telegram + who may talk to the bot")
+    section(4, L["steps"][3])
     settings["channels"] = {}
 
-    # ---- WhatsApp ----
-    wa_on = ask_yes("Enable the WhatsApp channel? (QR login)", True)
+    # WhatsApp
+    wa_on = ask_yes(L["enable_whatsapp"], True)
     env["WHATSAPP_ENABLED"] = "true" if wa_on else "false"
     if wa_on:
-        warn("QR login uses the UNOFFICIAL WhatsApp Web protocol — use a dedicated number.")
-        env["BOT_PREFIX"] = ask("Reply only to messages starting with a prefix? (empty = all)", "!ai ")
-        env["IGNORE_GROUPS"] = "true" if ask_yes("Ignore group chats?", True) else "false"
-        role = ask_choice("Which role should WhatsApp users get?", [
-            "user — chat & safe tools only (recommended)",
-            "admin — everything including accounting queries (owner only)",
+        warn(L["wa_warn"])
+        env["BOT_PREFIX"] = ask(L["wa_prefix"], "!ai ")
+        env["IGNORE_GROUPS"] = "true" if ask_yes(L["wa_ignore_groups"], True) else "false"
+        role_choice = ask_choice(L["wa_role_prompt"], [
+            L["wa_role_user"],
+            L["wa_role_admin"],
         ])
-        env["WHATSAPP_ROLE"] = "user" if role == 0 else "admin"
-        print(c("    Allowed numbers (international format, comma-separated; empty = everyone)", "dim"))
-        print(c("    Example: 967712345678,8613800138000", "dim"))
-        nums = ask("Allowed WhatsApp numbers", "")
+        env["WHATSAPP_ROLE"] = "user" if role_choice == 0 else "admin"
+        info(L["wa_allowed"])
+        info(L["wa_allowed_example"])
+        nums = ask(L["wa_allowed"], "")
         env["ALLOWED_NUMBERS"] = ",".join(_re.sub(r"\D", "", n) for n in nums.split(",") if n.strip())
-        # the numbers you whitelist get admin powers by default (edit ADMIN_NUMBERS in .env to change)
         env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
-        ok(f"WhatsApp: prefix '{env['BOT_PREFIX'] or '(all)'}', role {env['WHATSAPP_ROLE']}, "
-           f"allowed: {env['ALLOWED_NUMBERS'] or 'everyone'}")
-        settings["channels"]["whatsapp"] = {"role": env["WHATSAPP_ROLE"],
-                                            "allowed": env["ALLOWED_NUMBERS"]}
+        settings["channels"]["whatsapp"] = {
+            "role": env["WHATSAPP_ROLE"],
+            "allowed": env["ALLOWED_NUMBERS"],
+        }
+        ok(f"{L['wa_ok']}: prefix '{env['BOT_PREFIX'] or '(all)'}' · role {env['WHATSAPP_ROLE']}")
     else:
         settings["channels"]["whatsapp"] = {"enabled": False}
 
     print()
-    # ---- Telegram ----
-    tg_on = ask_yes("Enable the Telegram channel? (bot token)", False)
+
+    # Telegram
+    tg_on = ask_yes(L["enable_telegram"], False)
     env["TELEGRAM_ENABLED"] = "true" if tg_on else "false"
     if tg_on:
-        print(c("    Create a bot with @BotFather on Telegram to get a token.", "dim"))
-        env["TELEGRAM_BOT_TOKEN"] = ask("Telegram bot token", "")
+        info(L["tg_create_hint"])
+        env["TELEGRAM_BOT_TOKEN"] = ask(L["tg_token"], "")
         if env["TELEGRAM_BOT_TOKEN"]:
-            with Spinner("Verifying bot token"):
-                good, info = test_http(
+            with Spinner(L["tg_check_ok"]):
+                good, info2 = test_http(
                     f"https://api.telegram.org/bot{env['TELEGRAM_BOT_TOKEN']}/getMe")
-            ok("Bot token verified") if good else warn(f"Could not verify token ({info}) — saved anyway")
+            if good:
+                ok(L["tg_check_ok"])
+            else:
+                warn(f"{L['tg_check_fail']} ({info2})")
         else:
-            warn("No token entered — Telegram bridge will not start until you set TELEGRAM_BOT_TOKEN")
-        tg_allowed = ask("Allowed Telegram users (IDs or @usernames, comma; empty = everyone)", "")
+            warn(L["tg_no_token"])
+        tg_allowed = ask(L["tg_allowed"], "")
         env["TELEGRAM_ALLOWED"] = ",".join(x.strip() for x in tg_allowed.split(",") if x.strip())
         settings["channels"]["telegram"] = {"enabled": True, "allowed": env["TELEGRAM_ALLOWED"]}
-        ok(f"Telegram: token {'set' if env.get('TELEGRAM_BOT_TOKEN') else 'MISSING'}, "
-           f"allowed: {env['TELEGRAM_ALLOWED'] or 'everyone'}")
+        token_status = "set" if env.get("TELEGRAM_BOT_TOKEN") else "MISSING"
+        ok(f"{L['tg_ok']}: token {token_status}")
     else:
         settings["channels"]["telegram"] = {"enabled": False}
 
 
 def step_accounting(env: dict, settings: dict) -> None:
-    section(5, "Accounting — Onyx Pro", "Read-only SQL Server connection")
-    enabled = ask_yes("Connect the accounting database now?", False)
-    settings["accounting"] = {"enabled": enabled}
+    section(5, L["steps"][4])
+    enabled = ask_yes(L["enable_accounting"], False)
+    settings["accounting"] = {"enabled": enabled, "read_only": True}
     if not enabled:
-        warn("Skipped. Set ACCOUNTING_DB_URL in .env later (see docs/ONYX_SETUP.md).")
+        warn(L["acc_skip"])
         return
-    print(c("    Use a READ-ONLY database user (see docs/ONYX_SETUP.md).", "dim"))
-    host = ask("SQL Server host/IP", "192.168.1.10")
+    info(L["acc_warn"])
+    host = ask(L["acc_host"], "192.168.1.10")
     while True:
-        port_raw = ask("Port", "1433")
+        port_raw = ask(L["acc_port"], "1433")
         if port_raw.isdigit():
             port = int(port_raw)
             break
-        fail("Port must be a number.")
-    db = ask("Database name", "OnyxDB")
-    user = ask("DB user (read-only!)", "ai_agent_reader")
-    password = ask("DB password")
-    with Spinner(f"Testing connection to {host}:{port}"):
-        reachable, info = test_tcp(host, port)
+        fail("❌")
+    db = ask(L["acc_db"], "OnyxDB")
+    user = ask(L["acc_user"], "ai_agent_reader")
+    password = ask(L["acc_pass"])
+    with Spinner(f"Testing {host}:{port}"):
+        reachable, info2 = test_tcp(host, port)
     if reachable:
-        ok(f"Server reachable at {host}:{port}")
+        ok(f"{L['acc_server_ok']} at {host}:{port}")
     else:
-        warn(f"Cannot reach {host}:{port} ({info}) — saved anyway; check network/firewall")
+        warn(f"{L['acc_server_fail']} ({info2})")
     env["ACCOUNTING_DB_URL"] = (
         f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db}"
         "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
     )
-    settings["accounting"].update({
-        "read_only": True,
-        "allowed_queries": ["sales_summary", "revenue_by_month", "top_customers",
-                            "expenses_summary", "invoice_lookup", "cash_balance"],
-    })
-    warn("Adapt table names in connectors/accounting.py to your Onyx schema.")
-    ok("Accounting connection string saved.")
+    settings["accounting"]["allowed_queries"] = [
+        "sales_summary", "revenue_by_month", "top_customers",
+        "expenses_summary", "invoice_lookup", "cash_balance",
+        "vendor_balances", "sales_by_item",
+    ]
+
+    # Schema discovery
+    if ask_yes("🔄 اكتشاف هيكل الجداول تلقائياً؟", True) if LANG == "ar" else \
+       ask_yes("🔄 Auto-discover table schema now?", True):
+        with Spinner("Discovering database schema..."):
+            try:
+                from connectors.accounting import discover_schema, SCHEMA_CONFIG_PATH
+                schema = discover_schema(env["ACCOUNTING_DB_URL"])
+                schema.save()
+                found = len(schema.tables)
+                if found > 0:
+                    ok(f"تم اكتشاف {found} جدول")
+                    for k, v in schema.tables.items():
+                        info(f"  {v['table']} → {k}")
+                else:
+                    warn("لم يتم العثور على جداول - استخدم التكوين الافتراضي")
+            except ImportError:
+                warn("SQLAlchemy غير مثبت - جارٍ استخدام التكوين الافتراضي")
+            except Exception as e:
+                warn(f"فشل الاكتشاف - جارٍ استخدام التكوين الافتراضي: {e}")
+    else:
+        info("تم استخدام التكوين الافتراضي (Onyx Pro)")
+
+    ok(L["acc_ok"])
 
 
 def step_permissions(env: dict, settings: dict) -> None:
-    section(6, "Tools & Permissions", "What the AI is allowed to read & do")
+    section(6, L["steps"][5])
     perms = {}
-    perms["web_search"] = ask_yes("Allow web search?", True)
-    perms["calculator"] = ask_yes("Allow calculator?", True)
-    perms["get_current_time"] = ask_yes("Allow date/time?", True)
-    perms["read_file"] = ask_yes("Allow reading files from the workspace?", False)
+    perms["web_search"] = ask_yes(L["perm_web"], True)
+    perms["calculator"] = ask_yes(L["perm_calc"], True)
+    perms["get_current_time"] = ask_yes(L["perm_time"], True)
+    perms["read_file"] = ask_yes(L["perm_file"], False)
+    perms["search_conversations"] = ask_yes(L["perm_conversations"], True)
+    perms["generate_report"] = ask_yes(L["perm_reports"], True)
+    perms["list_reports"] = perms["generate_report"]
     accounting_on = settings.get("accounting", {}).get("enabled", False)
     if accounting_on:
-        perms["accounting_tools"] = ask_yes("Allow the agent to query accounting data?", True)
+        perms["accounting_tools"] = ask_yes(L["perm_accounting"], True)
     else:
         perms["accounting_tools"] = False
-    perms["knowledge_rag"] = ask_yes("Use the knowledge base (company documents)?", True)
+    perms["knowledge_rag"] = ask_yes(L["perm_knowledge"], True)
     settings["permissions"] = perms
     enabled = [k for k, v in perms.items() if v]
-    ok(f"Enabled: {', '.join(enabled) or 'none'}")
+    ok(f"{L['perm_enabled']}: {', '.join(enabled)}")
 
 
 def step_finish(env: dict, settings: dict) -> None:
-    section(7, "Finish", "Save, link WhatsApp, launch")
-    write_files(env, settings)
-    print_summary(env, settings)
+    section(7, L["steps"][6])
+    _write_files(env, settings)
+    _print_summary(env, settings)
     if env.get("WHATSAPP_ENABLED") == "true":
-        link_whatsapp_now(env)
+        _link_whatsapp(env)
     else:
-        warn("WhatsApp disabled — skipping linking.")
+        warn("WhatsApp disabled — skipping.")
 
 
-def link_whatsapp_now(env: dict) -> None:
-    if not ask_yes("Link your WhatsApp number NOW? (QR will appear here)", True):
-        warn("Skipped. The QR will appear on the first 'python start.py' run instead.")
-        return
-    node = node_cmd()
-    npm = npm_cmd()
-    if not node or not npm:
-        fail("Node.js is not installed — cannot link WhatsApp here.")
-        print(c("    Install it from https://nodejs.org then run: python start.py", "dim"))
-        return
-    wa_dir = os.path.join(ROOT, "whatsapp")
-    nm = os.path.join(wa_dir, "node_modules")
-    pkg = os.path.join(wa_dir, "package.json")
-    stale = (not os.path.isdir(nm)) or (
-        os.path.exists(pkg) and os.path.getmtime(pkg) > os.path.getmtime(nm))
-    if stale:
-        with Spinner("Installing WhatsApp bridge dependencies (~1-3 min)"):
-            r = subprocess.run(f'"{npm}" install', cwd=wa_dir, shell=True,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if r.returncode != 0:
-            fail("npm install failed. Run 'cd whatsapp && npm install' manually.")
-            return
-        ok("Dependencies installed")
-    print()
-    print(c("  Starting the bridge... the QR code will appear below.", "cyan"))
-    print(c("  On your phone: WhatsApp → Linked devices → Link a device", "dim"))
-    print(c("  Waiting up to 3 minutes for you to scan.\n", "dim"))
-    wa_env = dict(os.environ)
-    wa_env.update({
-        "AGENT_URL": "http://localhost:8000",
-        "WHATSAPP_PORT": "3001",
-        "ADMIN_KEY": env.get("ADMIN_KEY", "dev-admin-key"),
-        "USER_KEY": env.get("USER_KEY", "dev-user-key"),
-        "WHATSAPP_ROLE": env.get("WHATSAPP_ROLE", "user"),
-        "BOT_PREFIX": env.get("BOT_PREFIX", ""),
-        "IGNORE_GROUPS": env.get("IGNORE_GROUPS", "true"),
-        "ALLOWED_NUMBERS": env.get("ALLOWED_NUMBERS", ""),
-        "ADMIN_NUMBERS": env.get("ADMIN_NUMBERS", ""),
-        "CHAT_MEMORY": env.get("CHAT_MEMORY", "5"),
-        "REPORT_ENABLED": env.get("REPORT_ENABLED", "false"),
-        "REPORT_TIME": env.get("REPORT_TIME", "08:00"),
-        "REPORT_TO": env.get("REPORT_TO", ""),
-        "WHATSAPP_ENABLED": "true",
-    })
-    proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
-    try:
-        deadline = time.time() + 180
-        linked = False
-        while time.time() < deadline:
-            try:
-                with urllib.request.urlopen("http://localhost:3001/status", timeout=3) as r:
-                    if json.loads(r.read()).get("status") == "ready":
-                        linked = True
-                        break
-            except Exception:
-                pass
-            if proc.poll() is not None:
-                break
-            time.sleep(3)
-        print()
-        if linked:
-            ok("WhatsApp LINKED successfully! Session saved — no QR needed next time.")
-        else:
-            warn("Not linked yet (timeout or bridge stopped).")
-            print(c("    No problem: run 'python start.py' and the QR will show again.", "dim"))
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except Exception:
-            proc.kill()
-
-
-# ---------------------------------------------------------------- output
-def write_files(env: dict, settings: dict) -> None:
+# ─── File output ──────────────────────────────────────────────────
+def _write_files(env: dict, settings: dict) -> None:
     env_lines = [
         "# Generated by setup.py — edit anytime then restart the app",
         f"ADMIN_KEY={env.get('ADMIN_KEY', 'dev-admin-key')}",
@@ -468,14 +663,10 @@ def write_files(env: dict, settings: dict) -> None:
         f"WHATSAPP_ROLE={env.get('WHATSAPP_ROLE', 'user')}",
         f"ALLOWED_NUMBERS={env.get('ALLOWED_NUMBERS', '')}",
         f"ADMIN_NUMBERS={env.get('ADMIN_NUMBERS', '')}",
-        f"CHAT_MEMORY={env.get('CHAT_MEMORY', '5')}",
+        f"CHAT_MEMORY={env.get('CHAT_MEMORY', '20')}",
         f"REPORT_ENABLED={env.get('REPORT_ENABLED', 'false')}",
         f"REPORT_TIME={env.get('REPORT_TIME', '08:00')}",
         f"REPORT_TO={env.get('REPORT_TO', '')}",
-        f"REPORT_SCHEDULE={env.get('REPORT_SCHEDULE', 'daily')}",
-        f"ALERTS_ENABLED={env.get('ALERTS_ENABLED', 'false')}",
-        f"ALERT_LIMIT={env.get('ALERT_LIMIT', '0')}",
-        f"VISION_MODEL={env.get('VISION_MODEL', '')}",
         f"TELEGRAM_ENABLED={env.get('TELEGRAM_ENABLED', 'false')}",
         f"TELEGRAM_BOT_TOKEN={env.get('TELEGRAM_BOT_TOKEN', '')}",
         f"TELEGRAM_ALLOWED={env.get('TELEGRAM_ALLOWED', '')}",
@@ -485,52 +676,118 @@ def write_files(env: dict, settings: dict) -> None:
     os.makedirs(os.path.join(ROOT, "config"), exist_ok=True)
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
-    ok("Wrote .env")
-    ok("Wrote config/settings.json")
+    ok("📝 .env")
+    ok("📝 config/settings.json")
 
 
-def box_line(text: str, width: int = 64) -> str:
-    pad = width - len(ANSI.sub("", text))
-    return c("  ║ ", "cyan") + text + " " * max(pad, 0) + c(" ║", "cyan")
-
-
-def print_summary(env: dict, settings: dict) -> None:
+def _print_summary(env: dict, settings: dict) -> None:
     perms = ", ".join(k for k, v in settings.get("permissions", {}).items() if v) or "none"
     agent = settings.get("agent", {})
+    w = 58
     print()
-    print(c("  ╔" + "═" * 66 + "╗", "cyan"))
-    print(box_line(c("SETUP COMPLETE ✔", "green", "bold")))
-    print(c("  ╠" + "═" * 66 + "╣", "cyan"))
-    print(box_line(f"Model ......... {env.get('DEFAULT_MODEL', '')[:47]}"))
-    print(box_line(f"Agent ......... {agent.get('name', '')} (lang: {agent.get('language', 'auto')})"))
-    wa = "ON" if env.get("WHATSAPP_ENABLED") == "true" else "off"
-    tg = "ON" if env.get("TELEGRAM_ENABLED") == "true" else "off"
-    print(box_line(f"Channels ...... WhatsApp: {wa} · Telegram: {tg}"))
-    nums = env.get("ALLOWED_NUMBERS", "") or "everyone"
-    print(box_line(f"Allowed nums .. {nums[:48]}"))
+    print(color("  ╔" + "═" * w + "╗", "green"))
+    print(box_line(color(f"  {L['summary_title']}", "bold", "green"), w - 4))
+    print(color("  ╠" + "═" * w + "╣", "green"))
+    print(box_line(f"  🤖  {L['model_ok']}:  {env.get('DEFAULT_MODEL', '')[:42]}", w - 4))
+    print(box_line(f"  👤  {L['identity_ok']}: {agent.get('name', '')[:42]} ({agent.get('language', 'auto')})", w - 4))
+    wa = "ON" if env.get("WHATSAPP_ENABLED") == "true" else "OFF"
+    tg = "ON" if env.get("TELEGRAM_ENABLED") == "true" else "OFF"
+    print(box_line(f"  📡  WhatsApp: {wa}  ·  Telegram: {tg}", w - 4))
     acc = "connected" if env.get("ACCOUNTING_DB_URL") else "not configured"
-    print(box_line(f"Accounting .... {acc}"))
-    print(box_line(f"Permissions ... {perms[:48]}"))
-    print(c("  ╠" + "═" * 66 + "╣", "cyan"))
-    print(box_line(c("YOUR API KEYS — SAVE THESE:", "yellow")))
-    print(box_line(c(f"Admin: {env.get('ADMIN_KEY', '')}", "green")))
-    print(box_line(c(f"User:  {env.get('USER_KEY', '')}", "green")))
-    print(c("  ╠" + "═" * 66 + "╣", "cyan"))
-    print(box_line(c("START EVERYTHING WITH ONE COMMAND:", "yellow")))
-    print(box_line(c("   python start.py", "green", "bold")))
-    print(box_line("Dashboard:  http://localhost:8000"))
+    print(box_line(f"  🏦  {L['steps'][4][:35]}: {acc}", w - 4))
+    print(box_line(f"  🛠️   {L['perm_enabled']}: {perms[:42]}", w - 4))
+    print(color("  ╠" + "═" * w + "╣", "green"))
+    print(box_line(color(f"  {L['keys_warn']}", "yellow", "bold"), w - 4))
+    print(box_line(f"  {L['admin']}: {color(env.get('ADMIN_KEY', ''), 'green', 'bold')}", w - 4))
+    print(box_line(f"  {L['user']}:  {color(env.get('USER_KEY', ''), 'green', 'bold')}", w - 4))
+    print(color("  ╠" + "═" * w + "╣", "green"))
+    print(box_line(color(f"  {L['start_cmd']}", "yellow", "bold"), w - 4))
+    print(box_line(f"  {color('python start.py', 'cyan', 'bold')}", w - 4))
+    print(box_line(f"  {color('http://localhost:8000', 'cyan')}", w - 4))
     if env.get("DEFAULT_MODEL", "").startswith("ollama:"):
         model = env["DEFAULT_MODEL"].split(":", 1)[-1]
-        print(box_line(f"(first time: ollama pull {model})"))
-    print(c("  ╚" + "═" * 66 + "╝", "cyan"))
+        print(box_line(color(f"  (first time: ollama pull {model})", "dim"), w - 4))
+    print(color("  ╚" + "═" * w + "╝", "green"))
     print()
 
 
+def _link_whatsapp(env: dict) -> None:
+    if not ask_yes(L["link_wa_now"], True):
+        warn(L["link_wa_skip"])
+        return
+    node = node_cmd()
+    npm = npm_cmd()
+    if not node or not npm:
+        fail(L["link_wa_no_node"])
+        info(L["node_hint"])
+        return
+    wa_dir = os.path.join(ROOT, "whatsapp")
+    nm = os.path.join(wa_dir, "node_modules")
+    pkg = os.path.join(wa_dir, "package.json")
+    stale = (not os.path.isdir(nm)) or (
+        os.path.exists(pkg) and os.path.getmtime(pkg) > os.path.getmtime(nm))
+    if stale:
+        with Spinner(L["npm_install"]):
+            r = subprocess.run(f'"{npm}" install', cwd=wa_dir, shell=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if r.returncode != 0:
+            fail(L["npm_fail"])
+            return
+        ok("npm install OK")
+    print()
+    info(L["link_start"])
+    info(L["link_phone_hint"])
+    info(L["link_wait"])
+    wa_env = dict(os.environ)
+    wa_env.update({
+        "AGENT_URL": "http://localhost:8000",
+        "WHATSAPP_PORT": "3001",
+        "ADMIN_KEY": env.get("ADMIN_KEY", "dev-admin-key"),
+        "USER_KEY": env.get("USER_KEY", "dev-user-key"),
+        "WHATSAPP_ROLE": env.get("WHATSAPP_ROLE", "user"),
+        "BOT_PREFIX": env.get("BOT_PREFIX", ""),
+        "IGNORE_GROUPS": env.get("IGNORE_GROUPS", "true"),
+        "ALLOWED_NUMBERS": env.get("ALLOWED_NUMBERS", ""),
+        "ADMIN_NUMBERS": env.get("ADMIN_NUMBERS", ""),
+        "CHAT_MEMORY": env.get("CHAT_MEMORY", "20"),
+        "REPORT_ENABLED": env.get("REPORT_ENABLED", "false"),
+        "REPORT_TIME": env.get("REPORT_TIME", "08:00"),
+        "REPORT_TO": env.get("REPORT_TO", ""),
+        "WHATSAPP_ENABLED": "true",
+    })
+    proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
+    try:
+        linked = False
+        while time.time() < deadline:
+            try:
+                with urllib.request.urlopen("http://localhost:3001/status", timeout=3) as r:
+                    if json.loads(r.read()).get("status") == "ready":
+                        linked = True
+                        break
+            except Exception:
+                pass
+            if proc.poll() is not None:
+                break
+            time.sleep(3)
+        print()
+        if linked:
+            ok(L["link_ok"])
+        else:
+            warn(L["link_timeout"])
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+
+
+# ─── Entry point ──────────────────────────────────────────────────
 def main() -> None:
     env: dict = {}
-    settings: dict = {"version": 3}
+    settings: dict = {"version": 4}
     try:
-        welcome()
+        banner()
         step_model(env, settings)
         step_identity(env, settings)
         step_security(env, settings)
@@ -540,7 +797,7 @@ def main() -> None:
         step_finish(env, settings)
     except KeyboardInterrupt:
         print()
-        fail("Aborted — nothing was saved.")
+        fail(L["aborted"])
         sys.exit(1)
 
 

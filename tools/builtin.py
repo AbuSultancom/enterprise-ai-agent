@@ -3,10 +3,70 @@ from __future__ import annotations
 
 import datetime
 import math
+import os
 
 import httpx
 
 from .registry import registry
+
+
+@registry.register(
+    description="Search through past conversations to recall what was discussed.",
+    parameters={"query": {"type": "str", "description": "What to search for in past conversations"}},
+)
+def search_conversations(query: str) -> str:
+    from memory.conversation import get_store
+    store = get_store()
+    results = store.search(query, limit=8)
+    if not results:
+        return "No past conversations found matching that query."
+    lines = []
+    for r in results:
+        lines.append(f"[{r['session_title']}] {r['role']}: {r['content'][:300]}")
+    return "\n\n".join(lines)
+
+
+@registry.register(
+    description="Generate and save a text report to the data/reports folder. Returns the file path.",
+    parameters={
+        "title": {"type": "str", "description": "Report title (used as filename)"},
+        "content": {"type": "str", "description": "Report body content in plain text or markdown"},
+    },
+)
+def generate_report(title: str, content: str) -> str:
+    import datetime
+    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "data", "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    safe_name = "".join(c for c in title if c.isalnum() or c in " _-").strip() or "report"
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{safe_name}_{timestamp}.md"
+    filepath = os.path.join(reports_dir, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(f"# {title}\n\n")
+        f.write(f"Generated: {datetime.datetime.now().isoformat()}\n\n")
+        f.write(content)
+    return f"Report saved to: {filepath}"
+
+
+@registry.register(
+    description="List all previously saved reports in the data/reports folder.",
+    parameters={},
+)
+def list_reports() -> str:
+    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "data", "reports")
+    if not os.path.isdir(reports_dir):
+        return "No reports found yet."
+    files = sorted(os.listdir(reports_dir), reverse=True)
+    if not files:
+        return "No reports found yet."
+    lines = []
+    for f in files[:20]:
+        fpath = os.path.join(reports_dir, f)
+        size = os.path.getsize(fpath)
+        lines.append(f"- {f} ({size} bytes)")
+    return "Saved reports:\n" + "\n".join(lines)
 
 
 @registry.register(

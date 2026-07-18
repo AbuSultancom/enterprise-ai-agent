@@ -6,7 +6,10 @@
     "get_current_time": true,
     "read_file": false,
     "accounting_tools": true,
-    "knowledge_rag": true
+    "knowledge_rag": true,
+    "search_conversations": true,
+    "generate_report": true,
+    "list_reports": true
   },
   "accounting": {
     "enabled": false,
