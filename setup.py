@@ -24,6 +24,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(ROOT, ".env")
 SETTINGS_FILE = os.path.join(ROOT, "config", "settings.json")
 TOTAL_STEPS = 7
+EXPRESS_MODE = False
+SKIP_ACCOUNTING = False
 
 # ─── ANSI palette ────────────────────────────────────────────────
 C = {
@@ -283,6 +285,84 @@ STR = {
 L = STR[LANG]
 
 
+# ─── Pre-flight checks ────────────────────────────────────────────
+def preflight_check() -> None:
+    """Check Python, venv, deps, internet, Node.js before starting."""
+    global EXPRESS_MODE
+    checks_ok = True
+
+    # 1. Python version
+    if sys.version_info < (3, 11):
+        warn(f"Python ≥ 3.11 مطلوب (أنت تستخدم {sys.version_info[0]}.{sys.version_info[1]})")
+        warn(f"Python ≥ 3.11 required (you have {sys.version_info[0]}.{sys.version_info[1]})")
+        checks_ok = False
+
+    # 2. Virtual environment check
+    in_venv = (hasattr(sys, "real_prefix") or
+               (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
+    if not in_venv:
+        warn("🚩 البيئة الافتراضية غير مفعلة — يفضل: python -m venv venv && venv\\Scripts\\activate")
+        warn("🚩 Virtual environment not active — recommended: python -m venv venv && source venv/bin/activate")
+
+    # 3. Dependencies check
+    missing = []
+    for pkg in ["fastapi", "uvicorn", "httpx", "pydantic", "sqlalchemy"]:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        warn(f"📦 بعض الاعتماديات مفقودة: {', '.join(missing)}")
+        warn(f"📦 Missing packages: {', '.join(missing)}")
+        if ask_yes("  تثبيتها الآن؟ / Install now?", True):
+            info("جاري التثبيت... (قد يستغرق دقيقة)")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
+                                   os.path.join(ROOT, "requirements.txt")],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            ok("✅ تم تثبيت الاعتماديات")
+
+    # 4. Express mode
+    EXPRESS_MODE = ask_yes("⚡ وضع سريع؟ (قيم افتراضية للأسئلة المتكررة)", False)
+    if EXPRESS_MODE:
+        ok("تم اختيار الوضع السريع — استخدم القيم الافتراضية")
+
+    # 5. Internet check
+    info("🔍 فحص الاتصال بالإنترنت...")
+    try:
+        socket.create_connection(("8.8.8.8", 53), timeout=3)
+        ok("✅ الإنترنت متصل")
+    except OSError:
+        warn("⚠️ الإنترنت غير متصل — اختبارات API السحابية ستفشل")
+
+    # 6. Node.js check
+    node = shutil.which("node") or shutil.which("node.exe")
+    npm = shutil.which("npm") or shutil.which("npm.exe")
+    if node:
+        ok(f"✅ Node.js: {node}")
+    else:
+        warn("⚠️ Node.js غير مثبت — واتساب لن يعمل")
+        warn("   ثبته من: https://nodejs.org")
+    if npm:
+        ok(f"✅ npm: {npm}")
+    else:
+        warn("⚠️ npm غير موجود")
+
+    print()
+    if not checks_ok:
+        fail("❌ المتطلبات الأساسية غير مكتملة — راجع التحذيرات أعلاه")
+        sys.exit(1)
+    ok("✅ كل الفحوصات مكتملة")
+    print()
+
+
+# ─── Skip / Express helpers ──────────────────────────────────────
+def maybe_skip(step_num: int, title: str) -> bool:
+    """In express mode, skip with defaults. Otherwise ask to skip."""
+    if EXPRESS_MODE:
+        return True
+    return not ask_yes(f"⏭️ تخطي خطوة \"{title}\"؟ / Skip \"{title}\"?", False)
+
+
 # ─── UI helpers ───────────────────────────────────────────────────
 def box_top(width: int = 60) -> str:
     return color("  ┌" + "─" * width + "┐", "cyan")
@@ -518,7 +598,10 @@ def step_channels(env: dict, settings: dict) -> None:
     settings["channels"] = {}
 
     # WhatsApp
-    wa_on = ask_yes(L["enable_whatsapp"], True)
+    if EXPRESS_MODE:
+        wa_on = False
+    else:
+        wa_on = ask_yes(L["enable_whatsapp"], True)
     env["WHATSAPP_ENABLED"] = "true" if wa_on else "false"
     if wa_on:
         warn(L["wa_warn"])
@@ -565,6 +648,10 @@ def step_channels(env: dict, settings: dict) -> None:
 
 def step_accounting(env: dict, settings: dict) -> None:
     section(5, L["steps"][4])
+    if maybe_skip(5, L["step_titles"][4]):
+        warn(L["acc_skip"])
+        settings["accounting"] = {"enabled": False, "read_only": True}
+        return
     enabled = ask_yes(L["enable_accounting"], False)
     settings["accounting"] = {"enabled": enabled, "read_only": True}
     if not enabled:
@@ -886,6 +973,7 @@ def main() -> None:
     settings: dict = {"version": 4}
     try:
         choose_language()
+        preflight_check()
         banner()
         step_model(env, settings)
         step_identity(env, settings)
