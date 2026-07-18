@@ -565,8 +565,8 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
     </div>
     <div class="header-actions">
       <button class="header-btn" onclick="toggleLang()" id="langBtn">EN</button>
+      <button class="header-btn" onclick="showHealth()">📊</button>
       <button class="header-btn" onclick="showSettings()">⚙️</button>
-      <button class="header-btn" onclick="showKnowledge()" id="kbBtn">📚</button>
     </div>
   </div>
 
@@ -607,6 +607,7 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
     <div class="tabs">
       <button class="tab active" data-tab="tabModel" onclick="switchTab(this,'tabModel')" data-i18n="tab_model">الموديل</button>
       <button class="tab" data-tab="tabKeys" onclick="switchTab(this,'tabKeys')" data-i18n="tab_keys">المفاتيح</button>
+      <button class="tab" data-tab="tabKB" onclick="switchTab(this,'tabKB');loadKnowledge()">📚 <span data-i18n="kb_title">المعرفة</span></button>
       <button class="tab" data-tab="tabAbout" onclick="switchTab(this,'tabAbout')" data-i18n="tab_about">حول</button>
     </div>
     <div class="tab-content active" id="tabModel">
@@ -627,26 +628,28 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
       <p style="font-size:0.8rem;color:var(--fg2);margin-top:8px" data-i18n="about_desc">منصة وكيل ذكاء اصطناعي للمؤسسات. يدعم المحادثة، البحث، المحاسبة، قراءة الصور، والتقارير.</p>
       <p style="font-size:0.75rem;color:var(--fg3);margin-top:12px">© AbuSultancom</p>
     </div>
-  </div>
-</div>
-
-<!-- === Knowledge Modal === -->
-<div class="modal-overlay" id="knowledgeModal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal('knowledgeModal')">✕</button>
-    <h2 data-i18n="kb_title">📚 قاعدة المعرفة</h2>
-    <p data-i18n="kb_desc">المستندات المرفوعة التي يمكن للوكيل البحث فيها:</p>
-    <div id="kbList" style="margin-top:12px"></div>
-    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('uploadInput').click()">
-      <span data-i18n="upload_hint">📄 اضغط لرفع ملف (PDF, Word, نص)</span>
+    <div class="tab-content" id="tabKB">
+      <p data-i18n="kb_desc">المستندات المرفوعة التي يمكن للوكيل البحث فيها:</p>
+      <div id="kbList" style="margin-top:10px;min-height:60px"></div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('uploadInput').click()">
+        <span data-i18n="upload_hint">📄 اضغط لرفع ملف (PDF, Word, نص)</span>
+      </div>
+      <input type="file" id="uploadInput" style="display:none" accept=".txt,.md,.pdf,.docx,.csv">
     </div>
-    <input type="file" id="uploadInput" style="display:none" accept=".txt,.md,.pdf,.docx,.csv">
-    <p id="uploadStatus" style="font-size:0.75rem;color:var(--fg3);margin-top:6px"></p>
   </div>
 </div>
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- === Health Modal === -->
+<div class="modal-overlay" id="healthModal">
+  <div class="modal" style="max-width:600px">
+    <button class="modal-close" onclick="closeModal('healthModal')">✕</button>
+    <h2 data-i18n="health_title">📊 حالة النظام</h2>
+    <div id="healthContent" style="margin-top:12px;font-size:0.85rem;line-height:1.8"><p data-i18n="loading">جارٍ التحميل...</p></div>
+  </div>
+</div>
 
 <script>
 // === i18n ===
@@ -663,6 +666,7 @@ const I18N = {
     keys_desc:'مفاتيح API الخاصة بك (تظهر مرة واحدة فقط عند الإعداد):',
     save_key:'💾 حفظ',
     about_desc:'منصة وكيل ذكاء اصطناعي للمؤسسات.',
+    health_title:'📊 حالة النظام',loading:'جارٍ التحميل...',status_ok:'✅ متصل',status_error:'❌ غير متصل',
     kb_title:'📚 قاعدة المعرفة',kb_desc:'المستندات المرفوعة التي يمكن للوكيل البحث فيها:',
     kb_loading:'جارٍ التحميل...',
     upload_hint:'📄 اضغط لرفع ملف (PDF, Word, نص)',
@@ -690,6 +694,7 @@ const I18N = {
     keys_desc:'Your API keys (shown once during setup):',
     save_key:'💾 Save',
     about_desc:'Enterprise AI Agent platform for organizations.',
+    health_title:'📊 System Status',loading:'Loading...',status_ok:'✅ Connected',status_error:'❌ Disconnected',
     kb_title:'📚 Knowledge Base',kb_desc:'Uploaded documents the agent can search:',
     upload_hint:'📄 Click to upload (PDF, Word, text)',
     input_placeholder:'Type your question here...',
@@ -969,9 +974,56 @@ async function checkHealth(){
 // === Modals ===
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 function showSettings(){document.getElementById('settingsModal').classList.add('open')}
-function showKnowledge(){
-  document.getElementById('knowledgeModal').classList.add('open');
-  loadKnowledge();
+async function showHealth(){
+  document.getElementById('healthModal').classList.add('open');
+  const el=document.getElementById('healthContent');
+  el.innerHTML='<p>'+t('loading')+'...</p>';
+  try{
+    const h=await api('/health');const health=await h.json();
+    let tools=[],acc=null,kb=[];
+    try{const t=await api('/v1/tools');tools=await t.json()}catch(e){}
+    try{const a=await api('/v1/accounting/health');acc=await a.json()}catch(e){}
+    try{const k=await api('/v1/knowledge');kb=await k.json()}catch(e){}
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0">
+        <div style="background:var(--bg3);padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:1.5rem">${health.status==='ok'?'✅':'❌'}</div>
+          <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">${t('status_'+(health.status==='ok'?'ok':'error'))}</div>
+        </div>
+        <div style="background:var(--bg3);padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:1.5rem;color:var(--accent)">${health.tools||0}</div>
+          <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">${t('tools_count')||'أدوات'}</div>
+        </div>
+      </div>
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
+        <strong>🧠 ${t('tab_model')}</strong>
+        <div style="font-size:0.8rem;color:var(--fg2);margin-top:4px">
+          Ollama: ${health.providers?.ollama?'✅':'❌'} | OpenAI: ${health.providers?.openai?'✅':'❌'}
+          ${health.providers?.ollama?'<br>Ollama: <span style="color:var(--success)">'+t('status_ok')+'</span>':''}
+        </div>
+      </div>
+      ${acc?`<div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
+        <strong>🏦 ${t('feat_accounting')||'Accounting'}</strong>
+        <div style="font-size:0.8rem;color:var(--fg2);margin-top:4px">
+          ${acc.connection?.connected?'✅ '+t('status_ok'):'❌ '+t('status_error')}
+          ${acc.connection?.database?'<br>DB: '+acc.connection.database:''}
+          <br>Tables: ${acc.schema?.tables?Object.keys(acc.schema.tables).length:0}
+        </div>
+      </div>`:''}
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
+        <strong>🛠️ ${t('tools_label')||'Tools'} (${tools.length})</strong>
+        <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
+          ${tools.map(t=>'<span style="background:var(--bg4);padding:2px 8px;border-radius:4px">'+t.name+'</span>').join('')}
+        </div>
+      </div>
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
+        <strong>📚 ${t('kb_title')} (${kb.length})</strong>
+        <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">
+          ${kb.length?kb.map(d=>'📄 '+d.title).join('<br>'):t('kb_empty')}
+        </div>
+      </div>
+    `;
+  }catch(e){el.innerHTML='<p style="color:var(--danger)">'+t('status_error')+'</p>'}
 }
 function switchTab(btn,id){
   btn.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
