@@ -10,7 +10,6 @@ Does EVERYTHING in one go:
   3. Installs WhatsApp bridge dependencies (only if missing)
   4. Starts the AI agent API + dashboard  -> http://localhost:8000
   5. Starts the WhatsApp bridge           -> QR prints right here in the terminal
-  6. Starts the Telegram bridge           -> if enabled in the wizard
 
 Press Ctrl+C to stop everything.
 """
@@ -88,12 +87,24 @@ def node_cmd() -> str | None:
     return shutil.which("node") or shutil.which("node.exe")
 
 
+def node_deps_stale(wa_dir: str) -> bool:
+    """True if node_modules is missing or package.json is newer than it."""
+    nm = os.path.join(wa_dir, "node_modules")
+    pkg = os.path.join(wa_dir, "package.json")
+    if not os.path.isdir(nm):
+        return True
+    try:
+        return os.path.getmtime(pkg) > os.path.getmtime(nm)
+    except OSError:
+        return True
+
+
 def ensure_node_deps(npm: str) -> None:
     wa = os.path.join(ROOT, "whatsapp")
-    if os.path.isdir(os.path.join(wa, "node_modules")):
+    if not node_deps_stale(wa):
         print(c("  WhatsApp dependencies OK", "dim"))
         return
-    step("Installing WhatsApp bridge dependencies (first time)...")
+    step("Installing WhatsApp bridge dependencies...")
     subprocess.check_call(f'"{npm}" install', cwd=wa, shell=True)
 
 
