@@ -10,6 +10,7 @@ Does EVERYTHING in one go:
   3. Installs WhatsApp bridge dependencies (only if missing)
   4. Starts the AI agent API + dashboard  -> http://localhost:8000
   5. Starts the WhatsApp bridge           -> QR prints right here in the terminal
+  6. Starts the Telegram bridge           -> if enabled in the wizard
 
 Press Ctrl+C to stop everything.
 """
@@ -161,12 +162,25 @@ def main() -> None:
         wa = subprocess.Popen([node, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
         children.append(wa)
 
+    telegram_on = (env.get("TELEGRAM_ENABLED", "false") == "true"
+                   and bool(env.get("TELEGRAM_BOT_TOKEN")))
+    if telegram_on:
+        step("Starting the Telegram bridge")
+        tg_env = dict(env)
+        tg_env.setdefault("AGENT_URL", "http://localhost:8000")
+        tg = subprocess.Popen(
+            [sys.executable, os.path.join(ROOT, "telegram", "bridge.py")],
+            cwd=ROOT, env=tg_env)
+        children.append(tg)
+
     print(c("\n" + "=" * 58, "g"))
     print(c("  ALL RUNNING", "g", "bold"))
     print(c("=" * 58, "g"))
     print(f"  Dashboard:   {c('http://localhost:8000', 'c')}")
     if whatsapp_on:
         print(f"  WhatsApp QR: {c('http://localhost:3001', 'c')}  (or scan the QR printed above)")
+    if telegram_on:
+        print(f"  Telegram:    {c('bot connected — message it from Telegram', 'c')}")
     print(c("\n  Press Ctrl+C to stop everything\n", "dim"))
 
     try:

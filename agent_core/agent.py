@@ -7,7 +7,12 @@ import re
 from llm_gateway.gateway import LLMGateway, Message
 from tools.registry import ToolRegistry
 
-SYSTEM_PROMPT = """You are an enterprise AI agent. Answer the user's request accurately.
+try:
+    import config_loader
+except ImportError:
+    config_loader = None
+
+SYSTEM_PROMPT = """You are {name}, {personality}. Answer the user's request accurately.
 
 You can use tools. To call a tool, reply with EXACTLY this format and nothing else:
 TOOL_CALL: {{"name": "<tool_name>", "arguments": {{"arg": "value"}}}}
@@ -19,6 +24,23 @@ Available tools:
 """
 
 
+def _build_system_prompt(tools_desc: str) -> str:
+    identity = config_loader.agent_identity() if config_loader else {}
+    prompt = SYSTEM_PROMPT.format(
+        name=identity.get("name", "an enterprise AI agent"),
+        personality=identity.get("personality", "a professional, concise enterprise assistant"),
+        tools=tools_desc,
+    )
+    lang = identity.get("language", "auto")
+    if lang == "ar":
+        prompt += "\nAlways answer in Arabic, regardless of the question's language."
+    elif lang == "en":
+        prompt += "\nAlways answer in English, regardless of the question's language."
+    else:
+        prompt += "\nAnswer in the same language as the user's message."
+    return prompt
+
+
 class Agent:
     def __init__(self, gateway: LLMGateway, registry: ToolRegistry, max_steps: int = 6):
         self.gateway = gateway
@@ -27,7 +49,7 @@ class Agent:
 
     async def run(self, user_input: str, model: str | None = None,
                   history: list[Message] | None = None) -> dict:
-        messages = [Message(role="system", content=SYSTEM_PROMPT.format(tools=self.registry.describe()))]
+        messages = [Message(role="system", content=_build_system_prompt(self.registry.describe()))]
         messages.extend(history or [])
         messages.append(Message(role="user", content=user_input))
 
@@ -67,7 +89,7 @@ class Agent:
     async def run_stream(self, user_input: str, model: str | None = None,
                          history: list[Message] | None = None):
         HOLD_BACK = 400  # chars kept buffered so TOOL_CALL markup is never streamed
-        messages = [Message(role="system", content=SYSTEM_PROMPT.format(tools=self.registry.describe()))]
+        messages = [Message(role="system", content=_build_system_prompt(self.registry.describe()))]
         messages.extend(history or [])
         messages.append(Message(role="user", content=user_input))
 
