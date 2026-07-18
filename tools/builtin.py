@@ -82,10 +82,58 @@ def get_current_time() -> str:
     parameters={"expression": {"type": "str", "description": "Math expression"}},
 )
 def calculator(expression: str) -> str:
-    allowed = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
-    allowed.update({"abs": abs, "round": round, "min": min, "max": max})
+    """Evaluate a math expression using AST-based sandbox (no eval)."""
+    import ast
+    import operator as _operator
+
+    allowed_ops = {
+        ast.Add: _operator.add, ast.Sub: _operator.sub,
+        ast.Mult: _operator.mul, ast.Div: _operator.truediv,
+        ast.FloorDiv: _operator.floordiv, ast.Mod: _operator.mod,
+        ast.Pow: _operator.pow, ast.USub: _operator.neg,
+        ast.UAdd: _operator.pos,
+    }
+    allowed_funcs = {
+        "abs": abs, "round": round, "min": min, "max": max,
+        "pow": pow, "sum": sum,
+    }
+    # Expose math module functions by name
+    allowed_funcs.update(
+        {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+    )
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in allowed_funcs:
+                return allowed_funcs[node.id]
+            raise ValueError(f"Unknown identifier: {node.id}")
+        if isinstance(node, ast.Call):
+            func = _eval(node.func)
+            args = [_eval(a) for a in node.args]
+            return func(*args)
+        if isinstance(node, ast.BinOp):
+            op = allowed_ops.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op(_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp):
+            op = allowed_ops.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported unary operator: {type(node.op).__name__}")
+            return op(_eval(node.operand))
+        if isinstance(node, ast.List):
+            return [_eval(e) for e in node.elts]
+        raise ValueError(f"Unsupported syntax: {type(node).__name__}")
+
     try:
-        return str(eval(expression, {"__builtins__": {}}, allowed))  # noqa: S307 - sandboxed namespace
+        tree = ast.parse(expression.strip(), mode="eval")
+        return str(_eval(tree))
+    except ValueError as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -112,10 +160,15 @@ async def web_search(query: str) -> str:
     parameters={"path": {"type": "str", "description": "File path inside /data/workspace"}},
 )
 def read_file(path: str) -> str:
-    base = "/data/workspace"
-    safe_path = path.replace("..", "").lstrip("/")
+    import os.path
+    base = os.getenv("WORKSPACE_PATH", "/data/workspace")
+    # Resolve to an absolute path and ensure it stays under the workspace base
+    abs_base = os.path.abspath(base)
+    requested = os.path.normpath(os.path.join(abs_base, path))
+    if not requested.startswith(abs_base + os.sep) and requested != abs_base:
+        return f"Error: path '{path}' escapes the workspace boundary."
     try:
-        with open(f"{base}/{safe_path}", encoding="utf-8") as f:
+        with open(requested, encoding="utf-8") as f:
             return f.read()[:8000]
     except Exception as e:
         return f"Error: {e}"

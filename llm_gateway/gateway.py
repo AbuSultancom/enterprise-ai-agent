@@ -148,6 +148,9 @@ class LLMGateway:
                        "temperature": kw.get("temperature", 0.3)}
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=payload, headers=headers) as r:
+                    if r.status_code != 200:
+                        yield f"[Stream error: HTTP {r.status_code}]"
+                        return
                     async for line in r.aiter_lines():
                         if not line.startswith("data:"):
                             continue

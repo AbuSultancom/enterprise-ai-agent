@@ -66,7 +66,9 @@ def require_role(*roles: str):
 
 
 # --- Audit log (JSON lines) ---
-AUDIT_PATH = os.getenv("AUDIT_LOG_PATH", "/data/audit.jsonl")
+AUDIT_PATH = os.getenv("AUDIT_LOG_PATH",
+                     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  "data", "audit.jsonl"))
 
 
 def audit(event: str, role: str, detail: dict) -> None:

@@ -26,7 +26,9 @@ except ImportError:
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_CONFIG_PATH = os.getenv("ACCOUNTING_SCHEMA_PATH",
                                os.path.join(ROOT, "config", "accounting_schema.json"))
-READONLY_PATTERN = re.compile(r"^\s*(SELECT|WITH)\b", re.IGNORECASE | re.DOTALL)
+READONLY_PATTERN = re.compile(r"^\s*(?:--[^\n]*\n\s*)*(SELECT|WITH)\b", re.IGNORECASE | re.DOTALL)
+# Reject queries that contain semicolons (multi-statement) to prevent second-statement injection
+HAS_SEMICOLON = re.compile(r";\s*\S", re.DOTALL)
 
 # ─── Default schema (Onyx Pro - adjust per installation) ─────────
 DEFAULT_SCHEMA = {
@@ -482,6 +484,8 @@ class AccountingConnector:
             raise ValueError(f"Unknown query '{query_name}'. Available: {list(queries)}")
         if not READONLY_PATTERN.match(sql):
             raise PermissionError("Only read-only (SELECT) queries are allowed.")
+        if HAS_SEMICOLON.search(sql):
+            raise PermissionError("Multi-statement queries are not allowed.")
         try:
             with self.engine.connect() as conn:
                 result = conn.execute(text(sql), params)

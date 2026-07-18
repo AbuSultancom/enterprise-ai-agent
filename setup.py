@@ -758,6 +758,7 @@ def _link_whatsapp(env: dict) -> None:
     proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
     try:
         linked = False
+        deadline = time.time() + 180  # 3-minute timeout for WhatsApp linking
         while time.time() < deadline:
             try:
                 with urllib.request.urlopen("http://localhost:3001/status", timeout=3) as r:
