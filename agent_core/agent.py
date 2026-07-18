@@ -12,9 +12,22 @@ try:
 except ImportError:
     config_loader = None
 
-SYSTEM_PROMPT = """You are {name}, {personality}. Answer the user's request accurately.
+SYSTEM_PROMPT = """You are {name}, {personality}. Today's date is {date}.
 
-You can use tools. To call a tool, reply with EXACTLY this format and nothing else:
+REASONING RULES — follow them strictly:
+1. Think step by step before answering anything complex.
+2. NEVER guess numbers, dates, prices, or facts about the company. If the question needs
+   real-time or company data (sales, invoices, revenue, news, weather), ALWAYS call a tool.
+3. If a tool returns an error, empty data, or something unexpected: analyze WHY, adjust your
+   arguments (different date range, different parameter, different tool) and try ONCE more.
+   Only tell the user "no data found" after a genuine retry.
+4. When tool data arrives, do not dump it raw — interpret it: give the headline number first,
+   then a short breakdown in bullet points, then one insight or comparison if relevant.
+5. If the question is ambiguous, answer the most likely interpretation AND mention what else
+   you could look up.
+6. Keep answers concise and well-formatted: short paragraphs, bullets, **bold** key figures.
+
+TOOL USE — to call a tool, reply with EXACTLY this format and nothing else:
 TOOL_CALL: {{"name": "<tool_name>", "arguments": {{"arg": "value"}}}}
 
 When you have the final answer, reply normally (no TOOL_CALL).
@@ -23,12 +36,20 @@ Available tools:
 {tools}
 """
 
+ERROR_HINT = (
+    "The tool call above failed or returned an error. Analyze the error, fix your arguments "
+    "(e.g. different date format/range, valid parameter values) and try a different call. "
+    "If the same tool fails twice, answer the user with what you know and say the data source had an issue."
+)
+
 
 def _build_system_prompt(tools_desc: str) -> str:
+    import datetime
     identity = config_loader.agent_identity() if config_loader else {}
     prompt = SYSTEM_PROMPT.format(
         name=identity.get("name", "an enterprise AI agent"),
         personality=identity.get("personality", "a professional, concise enterprise assistant"),
+        date=datetime.date.today().isoformat(),
         tools=tools_desc,
     )
     lang = identity.get("language", "auto")
@@ -42,7 +63,7 @@ def _build_system_prompt(tools_desc: str) -> str:
 
 
 class Agent:
-    def __init__(self, gateway: LLMGateway, registry: ToolRegistry, max_steps: int = 6):
+    def __init__(self, gateway: LLMGateway, registry: ToolRegistry, max_steps: int = 8):
         self.gateway = gateway
         self.registry = registry
         self.max_steps = max_steps
@@ -79,7 +100,8 @@ class Agent:
 
             steps.append({"tool": tool_name, "arguments": args, "observation": observation[:2000]})
             messages.append(Message(role="assistant", content=content))
-            messages.append(Message(role="user", content=f"TOOL_RESULT: {observation}"))
+            hint = "\n" + ERROR_HINT if observation.startswith("Error") else ""
+            messages.append(Message(role="user", content=f"TOOL_RESULT: {observation}{hint}"))
 
         return {"answer": "Reached maximum reasoning steps without a final answer.", "steps": steps}
 
@@ -128,7 +150,8 @@ class Agent:
 
             yield {"type": "step", "tool": tool_name, "arguments": args}
             messages.append(Message(role="assistant", content=buffer))
-            messages.append(Message(role="user", content=f"TOOL_RESULT: {observation}"))
+            hint = "\n" + ERROR_HINT if observation.startswith("Error") else ""
+            messages.append(Message(role="user", content=f"TOOL_RESULT: {observation}{hint}"))
 
         yield {"type": "token", "text": "\nReached maximum reasoning steps."}
         yield {"type": "done"}
