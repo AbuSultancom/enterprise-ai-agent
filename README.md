@@ -1,159 +1,181 @@
-# Enterprise AI Agent Platform
+# Enterprise AI Agent Platform 🧠🚀
+
+وكيل ذكاء اصطناعي مؤسسي — استضافة ذاتية، يدعم العربية والإنجليزية.
 
 A self-hosted, open-source AI agent platform for companies — inspired by OpenClaw. Deploy it on your own infrastructure, connect local or cloud LLMs, plug in tools, and let employees chat with an agent that knows your company's documents.
 
-## Features
+---
 
-- **Multi-LLM gateway** — run fully local via Ollama (data never leaves your network) or route to any OpenAI-compatible API (DeepSeek, Qwen, vLLM...) with one config change
-- **ReAct agent loop** — the agent reasons, calls tools, observes results, and iterates until it has an answer
-- **Pluggable tools** — built-in: web search, calculator, file reader, clock. Add your own with one decorator
-- **Company knowledge (RAG)** — upload PDF/Word/text documents from the dashboard; semantic search via embeddings with keyword fallback
-- **Streaming chat (SSE)** — answers appear token by token
-- **Audit log** — every chat, upload, and accounting query is logged (admin-only access)
-- **Accounting integration (ERP)** — connects read-only to your accounting database (Onyx Pro / SQL Server) so the agent answers "how much did we sell this month?", "top customers?", "cash balance?" — see [docs/ONYX_SETUP.md](docs/ONYX_SETUP.md)
-- **WhatsApp integration** — customers/staff chat with the agent on WhatsApp; login once via QR code (like WhatsApp Web) — see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)
-- **WhatsApp power features** — conversation memory per chat, quick commands (`!ai ملخص` / `!ai مسح` / `!ai مساعدة`), per-number admin roles, and a daily scheduled report sent to your WhatsApp
-- **Telegram channel** — optional Telegram bot (token from @BotFather) with user whitelist; starts automatically with `start.py` when enabled
-- **Agent identity** — give the agent a name, answer language (auto/Arabic/English), and personality from the wizard; injected into the system prompt
-- **Role-based access** — `admin` and `user` roles via API keys (SSO/LDAP-ready design)
-- **Bilingual dashboard** — Arabic (RTL) / English chat UI served by the API, no separate frontend build
-- **One-command launcher** — `python start.py` does everything: wizard, deps, agent, WhatsApp with QR in the terminal
-- **Docker deploy** — Docker Compose with Ollama included
-- **Guided onboarding wizard** — `python setup.py` (OpenClaw/Hermes-style): welcome screen, progress bar, 7 steps — AI model (with live key test), agent identity, security keys, channels (WhatsApp QR + Telegram), accounting, permissions — and generates `.env` + `config/settings.json`
+## 📥 Installation Guide — دليل التثبيت الكامل
 
-## Architecture
+### 📋 المتطلبات الأساسية (Prerequisites)
 
-```
-┌────────────┐     ┌──────────────┐     ┌─────────────────┐
-│ Dashboard  │────▶│  FastAPI API  │────▶│  Agent (ReAct)  │
-│ (chat UI)  │     │  auth + RBAC  │     └───────┬─────────┘
-└────────────┘     └──────┬───────┘             │
-                          │            ┌────────▼────────┐
-                   ┌──────▼──────┐     │  Tool Registry  │
-                   │ LLM Gateway │     │ search · calc · │
-                   │ ollama/openai     │ files · custom  │
-                   └──────┬──────┘     └─────────────────┘
-                          │            ┌─────────────────┐
-                   Ollama / Cloud      │ Knowledge Store │
-                                        │  (RAG, /data)   │
-                                        └─────────────────┘
-```
+| المتطلب | الإصدار | ملاحظة |
+|---------|---------|--------|
+| **Python** | ≥ 3.11 | [`python.org`](https://python.org) |
+| **Node.js** | ≥ 18 | [`nodejs.org`](https://nodejs.org) — ضروري لوضع واتساب |
+| **Git** | أي إصدار | [`git-scm.com`](https://git-scm.com) |
+| **Ollama** | (اختياري) | [`ollama.com`](https://ollama.com) — للتشغيل المحلي |
 
-## Quick start
+---
 
-### Easiest — one command does everything
+### 🪜 خطوة بخطوة (Step by Step)
+
+### 1. تحميل المشروع (Clone)
 
 ```bash
 git clone https://github.com/AbuSultancom/enterprise-ai-agent.git
 cd enterprise-ai-agent
-python start.py
 ```
 
-`start.py` runs the setup wizard (first time only), installs dependencies,
-starts the agent API + dashboard, starts the WhatsApp bridge, and prints the
-**WhatsApp QR code right in the terminal**. Ctrl+C stops everything.
+### 2. إنشاء البيئة الافتراضية (Virtual Environment)
 
-- Web dashboard: **http://localhost:8000**
-- WhatsApp QR: printed in terminal + **http://localhost:3001**
-
-### With Docker
-
+#### Windows:
 ```bash
-python setup.py          # interactive wizard: AI model, WhatsApp, accounting, permissions
-cd deploy
-docker compose up -d --build
-# pull a model (first time only)
-docker exec -it deploy-ollama-1 ollama pull qwen2.5:7b
+python -m venv venv
+venv\Scripts\activate
 ```
 
-- Web dashboard: **http://localhost:8000** (log in with the admin key from the wizard)
-- WhatsApp QR scan page: **http://localhost:3001**
+#### Mac / Linux:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
-Full installation guide: [docs/SETUP.md](docs/SETUP.md)
-
-### Local development (no Docker)
+### 3. تثبيت الاعتماديات (Install Dependencies)
 
 ```bash
 pip install -r requirements.txt
-ollama pull qwen2.5:7b          # or any model you prefer
-uvicorn api.main:app --reload
 ```
 
-## Configuration (environment variables)
-
-| Variable | Default | Description |
-|---|---|---|
-| `API_KEYS` | `admin:dev-admin-key` | Comma-separated `role:key` pairs. Roles: `admin`, `user` |
-| `DEFAULT_MODEL` | `ollama:qwen2.5:7b` | Model as `provider:name` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint |
-| `OPENAI_API_KEY` | — | Key for the cloud provider |
-| `MEMORY_DB_PATH` | `/data/knowledge.json` | Knowledge store file |
-| `ACCOUNTING_DB_URL` | — | Accounting DB (SQLAlchemy URL, SQL Server for Onyx Pro) |
-| `ALLOWED_NUMBERS` | — (everyone) | WhatsApp whitelist, comma-separated international numbers |
-| `ADMIN_NUMBERS` | — | WhatsApp numbers with admin powers (accounting queries); self-chat is always admin |
-| `CHAT_MEMORY` | `5` | Conversation memory: last N exchanges remembered per chat (`0` = off) |
-| `REPORT_ENABLED` | `false` | Send a daily AI-generated report on WhatsApp |
-| `REPORT_TIME` | `08:00` | Report time (HH:MM, server local time) |
-| `REPORT_TO` | — (self-chat) | Number that receives the daily report |
-| `REPORT_MESSAGE` | daily summary prompt | What the agent is asked for the daily report |
-| `TELEGRAM_ENABLED` | `false` | Start the Telegram bridge with `start.py` |
-| `TELEGRAM_BOT_TOKEN` | — | Bot token from @BotFather |
-| `TELEGRAM_ALLOWED` | — (everyone) | Telegram whitelist: user IDs or @usernames, comma-separated |
-
-Switch providers per request: `{"message": "...", "model": "openai:deepseek-chat"}`.
-
-## API
-
-| Endpoint | Method | Role | Description |
-|---|---|---|---|
-| `/health` | GET | — | Service + provider status |
-| `/v1/chat` | POST | user+ | Chat with the agent |
-| `/v1/chat/stream` | POST | user+ | Chat with streaming (SSE) |
-| `/v1/tools` | GET | user+ | List registered tools |
-| `/v1/knowledge` | GET/POST | admin to add | Manage knowledge documents |
-| `/v1/knowledge/upload` | POST | admin | Upload PDF/Word/text into the knowledge base |
-| `/v1/knowledge/{id}` | DELETE | admin | Delete a document |
-| `/v1/admin/rotate-key` | POST | admin | Issue a new API key |
-| `/v1/admin/audit` | GET | admin | Read the audit log |
-| `/v1/accounting/query` | POST | admin | Run a whitelisted read-only accounting query |
-
-Example:
+### 4. تشغيل معالج الإعداد (Run Setup Wizard)
 
 ```bash
-curl -X POST http://localhost:8000/v1/chat \
-  -H "X-API-Key: dev-admin-key" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Search the web for the latest Qwen model and summarize it"}'
+python setup.py
 ```
 
-## Adding a custom tool
+المعالج يسألك 7 أسئلة:
+1. **مزود الذكاء** — اختر Ollama (محلي) أو DeepSeek/OpenAI (سحاب)
+2. **هوية الوكيل** — الاسم، اللغة (عربي/إنجليزي)، الشخصية
+3. **الأمان** — توليد مفاتيح API للوحة التحكم
+4. **القنوات** — تفعيل واتساب وتلغرام
+5. **المحاسبة** — ربط Onyx Pro (اختياري)
+6. **الصلاحيات** — الأدوات المسموحة
+7. **إنهاء** — حفظ الإعدادات
 
-```python
-# tools/builtin.py (or your own module imported in api/main.py)
-from tools.registry import registry
+### 5. تشغيل المشروع (Start Everything)
 
-@registry.register(
-    description="Look up an employee in the HR database.",
-    parameters={"employee_id": {"type": "str"}},
-)
-def hr_lookup(employee_id: str) -> str:
-    ...
+```bash
+python start.py
 ```
 
-The agent discovers and can call it immediately — no other changes needed.
+راح يشتغل تلقائياً:
+- 🌐 **Dashboard:** http://localhost:8000
+- 📱 **WhatsApp QR:** http://localhost:3001 (أو يظهر في الطرفية)
+- 🤖 **API:** http://localhost:8000/v1/chat
 
-## Roadmap
+> **إيقاف:** Ctrl+C
 
-- [x] Semantic search (embeddings with keyword fallback) for the knowledge store
-- [x] File upload (PDF / Word / text) into the knowledge base from the dashboard
-- [x] Streaming responses (SSE)
-- [x] Audit log per user (`/v1/admin/audit`)
-- [x] Arabic / English dashboard (RTL)
-- [x] WhatsApp conversation memory, quick commands, per-number roles, daily report
-- [ ] Multi-agent orchestration and scheduled tasks
-- [ ] SSO / LDAP authentication
+---
 
-## License
+### 🐳 تشغيل عبر Docker (قريباً)
 
-MIT
+```bash
+cd deploy
+docker compose up -d
+```
+
+---
+
+## ✨ المميزات (Features)
+
+| الميزة | الحالة |
+|-------|--------|
+| **🤖 Multi-Agent Orchestrator** — 4 وكلاء متخصصين | ✅ |
+| **💬 محادثة ذكية** (Streaming + عربي/إنجليزي) | ✅ |
+| **🔍 بحث ويب** (DuckDuckGo) | ✅ |
+| **🖼️ قراءة الصور** (Vision - فواتير، مستندات) | ✅ |
+| **📊 Dashboard عصري** (Dark Mode, RTL) | ✅ |
+| **💾 ذاكرة محادثة دائمة** (SQLite + FTS5) | ✅ |
+| **🌤️ الطقس** + **💰 أسعار العملات** | ✅ |
+| **📄 إنشاء تقارير** | ✅ |
+| **📱 واتساب** (QR login) | ✅ |
+| **💬 تلغرام** (Bot token) | ✅ |
+| **🏦 محاسبة متعددة القواعد** (Onyx Pro + غيره) | ✅ |
+| **📚 قاعدة معرفة** (رفع PDF/Word/نص) | ✅ |
+| **🔒 أمان** (صلاحيات Admin/User، قراءة فقط) | ✅ |
+
+---
+
+## 🔧 الأدوات (19 Tool)
+
+| الأداة | الوظيفة |
+|-------|---------|
+| `web_search` | بحث في الويب |
+| `get_weather` | طقس أي مدينة |
+| `get_currency_rate` | سعر صرف العملات |
+| `calculator` | آلة حاسبة آمنة |
+| `get_current_time` | التاريخ والوقت |
+| `read_file` | قراءة ملفات |
+| `read_image` | تحليل الصور بالذكاء الاصطناعي |
+| `search_conversations` | بحث في المحادثات السابقة |
+| `generate_report` | إنشاء تقارير |
+| `list_reports` | عرض التقارير |
+| `list_databases` | عرض قواعد البيانات المتصلة |
+| `add_database` | إضافة قاعدة بيانات جديدة |
+| `diagnose_connection` | تشخيص اتصال قاعدة البيانات |
+| `discover_schema_tool` | اكتشاف هيكل الجداول |
+| `show_schema_config` | عرض إعدادات الجداول |
+| `get_sales_summary` | ملخص المبيعات |
+| `get_invoice` | بحث عن فاتورة |
+| `get_vendor_balances` | أرصدة الموردين |
+| `get_sales_by_item` | مبيعات حسب الصنف |
+
+---
+
+## 🏗️ المشروع Architecture
+
+```
+enterprise-ai-agent/
+├── api/main.py              # FastAPI server
+├── agent_core/agent.py      # ReAct agent loop
+├── orchestrator/agent.py    # Multi-Agent orchestrator
+├── connectors/accounting.py # Accounting DB connector
+├── llm_gateway/gateway.py   # LLM provider (Ollama/OpenAI)
+├── tools/                   # Tool registry + built-in tools
+│   ├── registry.py
+│   ├── builtin.py
+│   └── accounting.py
+├── memory/                  # Conversation + Knowledge stores
+│   ├── conversation.py
+│   └── store.py
+├── dashboard/index.html     # Web UI
+├── telegram/bridge.py       # Telegram bot
+├── whatsapp/index.js        # WhatsApp bridge
+├── deploy/                  # Docker config
+├── setup.py                 # Setup wizard
+└── start.py                 # One-command launcher
+```
+
+---
+
+## 📡 API
+
+| الـ Endpoint | الطريقة | الوظيفة |
+|---|---|---|
+| `/health` | GET | حالة النظام |
+| `/v1/chat` | POST | محادثة |
+| `/v1/chat/stream` | POST | محادثة متدفقة |
+| `/v1/conversations` | GET | قائمة المحادثات |
+| `/v1/knowledge` | GET/POST | إدارة المعرفة |
+| `/v1/knowledge/upload` | POST | رفع ملف |
+| `/v1/tools` | GET | قائمة الأدوات |
+| `/v1/accounting/health` | GET | حالة المحاسبة |
+| `/v1/accounting/databases` | GET/POST | إدارة قواعد البيانات |
+| `/v1/admin/audit` | GET | سجل التدقيق |
+
+---
+
+## 📝 License
+
+MIT — © AbuSultancom
