@@ -387,8 +387,12 @@ def link_whatsapp_now(env: dict) -> None:
         print(c("    Install it from https://nodejs.org then run: python start.py", "dim"))
         return
     wa_dir = os.path.join(ROOT, "whatsapp")
-    if not os.path.isdir(os.path.join(wa_dir, "node_modules")):
-        with Spinner("Installing WhatsApp bridge dependencies (first time, ~1-3 min)"):
+    nm = os.path.join(wa_dir, "node_modules")
+    pkg = os.path.join(wa_dir, "package.json")
+    stale = (not os.path.isdir(nm)) or (
+        os.path.exists(pkg) and os.path.getmtime(pkg) > os.path.getmtime(nm))
+    if stale:
+        with Spinner("Installing WhatsApp bridge dependencies (~1-3 min)"):
             r = subprocess.run(f'"{npm}" install', cwd=wa_dir, shell=True,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if r.returncode != 0:
