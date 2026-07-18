@@ -17,6 +17,7 @@ import tools.builtin  # noqa: F401 - registers built-in tools
 import tools.accounting  # noqa: F401 - registers accounting/ERP tools
 import config_loader
 from agent_core.agent import Agent
+from orchestrator.agent import OrchestratorAgent
 from connectors.accounting import connector as accounting_db
 from llm_gateway.gateway import LLMGateway, Message
 from memory.store import KnowledgeStore
@@ -94,6 +95,7 @@ class ChatRequest(BaseModel):
     use_knowledge: bool = True
     history: list[dict] | None = None
     session_id: str | None = None
+    mode: str = "single"
 
 
 class DocRequest(BaseModel):
@@ -123,7 +125,11 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
     # Save user message
     conv_store.save_message(session_id, "user", req.message)
 
-    agent = Agent(gateway, registry)
+    # Select agent based on mode
+    if req.mode == "orchestrator":
+        agent = OrchestratorAgent(gateway)
+    else:
+        agent = Agent(gateway, registry)
     message = req.message
     if req.use_knowledge and config_loader.knowledge_rag_enabled():
         message = await _with_knowledge(req.message)
@@ -159,7 +165,11 @@ async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin
     # Save user message
     conv_store.save_message(session_id, "user", req.message)
 
-    agent = Agent(gateway, registry)
+    # Select agent based on mode
+    if req.mode == "orchestrator":
+        agent = OrchestratorAgent(gateway)
+    else:
+        agent = Agent(gateway, registry)
     message = req.message
     if req.use_knowledge and config_loader.knowledge_rag_enabled():
         message = await _with_knowledge(req.message)
