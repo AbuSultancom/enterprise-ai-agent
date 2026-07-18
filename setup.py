@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-Enterprise AI Agent — Interactive Setup Wizard
-==============================================
-Run this after downloading the project:
+Enterprise AI Agent — Interactive Setup Wizard (v2)
+===================================================
+Run after downloading the project:
 
     python setup.py
 
-A friendly terminal UI that asks about every setting — AI model, WhatsApp,
-accounting (Onyx Pro), permissions — tests connections live, then generates
-.env, config/settings.json, and (optionally) starts the Docker stack.
-Pure standard library — no dependencies needed.
+Complete guided setup in a friendly terminal UI:
+  1. AI model (with live connection test)
+  2. Access keys
+  3. WhatsApp — config + allowed phone numbers
+  4. Accounting (Onyx Pro) — with live server test
+  5. Agent permissions
+  6. Link WhatsApp NOW — scan the QR inside the wizard and confirm connection
+
+Generates .env + config/settings.json. Pure standard library.
 """
 from __future__ import annotations
 
@@ -25,15 +30,14 @@ import threading
 import time
 import urllib.request
 
-ENV_FILE = ".env"
-SETTINGS_FILE = os.path.join("config", "settings.json")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+ENV_FILE = os.path.join(ROOT, ".env")
+SETTINGS_FILE = os.path.join(ROOT, "config", "settings.json")
 
 # ------------------------------------------------------------------ palette
-C = {
-    "reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
-    "green": "\033[92m", "yellow": "\033[93m", "blue": "\033[94m",
-    "cyan": "\033[96m", "red": "\033[91m", "magenta": "\033[95m",
-}
+C = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
+     "green": "\033[92m", "yellow": "\033[93m", "blue": "\033[94m",
+     "cyan": "\033[96m", "red": "\033[91m"}
 ANSI = _re.compile(r"\033\[[0-9;]*m")
 
 
@@ -60,20 +64,20 @@ BANNER = r"""
 def banner() -> None:
     clear()
     print(c(BANNER, "cyan"))
-    print(c("  Interactive Setup Wizard", "bold"), c(" v0.4", "dim"))
+    print(c("  Interactive Setup Wizard", "bold"), c(" v2.0", "dim"))
     print(c("  Press Enter to accept any [default] · Ctrl+C to abort", "dim"))
 
 
 def section(num: int, total: int, title: str, subtitle: str = "") -> None:
     print()
-    print(c("  +" + "-" * 56 + "+", "blue"))
-    print(c("  | ", "blue") + c(f" {num}/{total}  {title}".ljust(55), "bold") + c("|", "blue"))
+    print(c("  +" + "-" * 58 + "+", "blue"))
+    print(c("  | ", "blue") + c(f" STEP {num}/{total} — {title}".ljust(57), "bold") + c("|", "blue"))
     if subtitle:
-        print(c("  | ", "blue") + c(f" {subtitle}".ljust(55), "dim") + c("|", "blue"))
-    print(c("  +" + "-" * 56 + "+", "blue"))
+        print(c("  | ", "blue") + c(f" {subtitle}".ljust(57), "dim") + c("|", "blue"))
+    print(c("  +" + "-" * 58 + "+", "blue"))
 
 
-def ask(prompt: str, default: str = "", secret: bool = False) -> str:
+def ask(prompt: str, default: str = "") -> str:
     suffix = c(f" [{default}]", "dim") if default else ""
     value = input(f"  {c('?', 'yellow', 'bold')} {prompt}{suffix}: ").strip()
     return value or default
@@ -138,7 +142,7 @@ class Spinner:
     def __exit__(self, *args):
         self._stop.set()
         self._thread.join()
-        sys.stdout.write("\r" + " " * (len(self.text) + 10) + "\r")
+        sys.stdout.write("\r" + " " * (len(self.text) + 12) + "\r")
         sys.stdout.flush()
 
 
@@ -159,9 +163,21 @@ def test_tcp(host: str, port: int, timeout: int = 5) -> tuple[bool, str]:
         return False, str(e)[:60]
 
 
+def npm_cmd() -> str | None:
+    for name in ("npm", "npm.cmd", "npm.exe"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def node_cmd() -> str | None:
+    return shutil.which("node") or shutil.which("node.exe")
+
+
 # ---------------------------------------------------------------- sections
 def setup_llm(env: dict, settings: dict) -> None:
-    section(1, 5, "AI Model (LLM)", "The agent's brain - local or cloud")
+    section(1, 6, "AI Model (LLM)", "The agent's brain - local or cloud")
     choice = ask_choice("Which provider do you want to use?", [
         "Ollama - local, private, free (recommended)",
         "DeepSeek - cloud API, cheap & strong",
@@ -176,7 +192,7 @@ def setup_llm(env: dict, settings: dict) -> None:
         if good:
             ok(f"Ollama is reachable ({info})")
         else:
-            warn(f"Ollama not reachable at {env['OLLAMA_BASE_URL']} ({info}) - start it before chatting")
+            warn(f"Ollama not reachable at {env['OLLAMA_BASE_URL']} ({info})")
     else:
         presets = {
             1: ("https://api.deepseek.com/v1", "deepseek-chat"),
@@ -185,7 +201,7 @@ def setup_llm(env: dict, settings: dict) -> None:
         }
         base, model = presets[choice]
         env["OPENAI_BASE_URL"] = ask("API base URL", base)
-        env["OPENAI_API_KEY"] = ask("API key", secret=True)
+        env["OPENAI_API_KEY"] = ask("API key")
         env["DEFAULT_MODEL"] = "openai:" + ask("Model name", model)
         if env["OPENAI_API_KEY"]:
             with Spinner("Testing API key"):
@@ -203,7 +219,7 @@ def setup_llm(env: dict, settings: dict) -> None:
 
 
 def setup_security(env: dict, settings: dict) -> None:
-    section(2, 5, "Access & Security", "API keys for dashboard / WhatsApp / integrations")
+    section(2, 6, "Access & Security", "API keys for dashboard / WhatsApp / integrations")
     if ask_yes("Generate secure random API keys for you?", True):
         env["ADMIN_KEY"] = secrets.token_urlsafe(24)
         env["USER_KEY"] = secrets.token_urlsafe(24)
@@ -215,7 +231,7 @@ def setup_security(env: dict, settings: dict) -> None:
 
 
 def setup_whatsapp(env: dict, settings: dict) -> None:
-    section(3, 5, "WhatsApp (QR login)", "Chat with the agent from WhatsApp")
+    section(3, 6, "WhatsApp", "Config + which phone numbers may talk to the bot")
     enabled = ask_yes("Enable the WhatsApp bridge?", True)
     settings["whatsapp"] = {"enabled": enabled}
     if not enabled:
@@ -226,24 +242,39 @@ def setup_whatsapp(env: dict, settings: dict) -> None:
     print()
     warn("QR login uses the UNOFFICIAL WhatsApp Web protocol.")
     print(c("    A dedicated number for the bot is strongly recommended.", "dim"))
+
     prefix = ask("Reply only to messages starting with a prefix? (empty = all)", "!ai ")
     env["BOT_PREFIX"] = prefix
     env["IGNORE_GROUPS"] = "true" if ask_yes("Ignore group chats?", True) else "false"
+
     wa_role = ask_choice("Which API key role should WhatsApp users get?", [
         "user - chat & safe tools only (recommended for customers/staff)",
         "admin - everything including accounting queries (owner only)",
     ])
     env["WHATSAPP_ROLE"] = "user" if wa_role == 0 else "admin"
+
+    print()
+    print(c("    Allowed phone numbers: only these can talk to the bot.", "dim"))
+    print(c("    International format without +, comma-separated.", "dim"))
+    print(c("    Example: 967712345678,8613800138000  (empty = everyone)", "dim"))
+    numbers = ask("Allowed numbers", "")
+    cleaned = ",".join(_re.sub(r"\D", "", n) for n in numbers.split(",") if n.strip())
+    env["ALLOWED_NUMBERS"] = cleaned
+    if cleaned:
+        ok(f"Bot will answer ONLY: {cleaned}")
+    else:
+        warn("No restriction - the bot will answer ANYONE who messages it")
+
     settings["whatsapp"].update({
         "prefix": prefix,
         "ignore_groups": env["IGNORE_GROUPS"] == "true",
         "role": env["WHATSAPP_ROLE"],
+        "allowed_numbers": cleaned,
     })
-    ok(f"WhatsApp enabled - prefix '{prefix or '(all)'}', role: {env['WHATSAPP_ROLE']}")
 
 
 def setup_accounting(env: dict, settings: dict) -> None:
-    section(4, 5, "Accounting - Onyx Pro", "Read-only SQL Server connection")
+    section(4, 6, "Accounting - Onyx Pro", "Read-only SQL Server connection")
     enabled = ask_yes("Connect the accounting database now?", False)
     settings["accounting"] = {"enabled": enabled}
     if not enabled:
@@ -259,7 +290,7 @@ def setup_accounting(env: dict, settings: dict) -> None:
         fail("Port must be a number.")
     db = ask("Database name", "OnyxDB")
     user = ask("DB user (read-only!)", "ai_agent_reader")
-    password = ask("DB password", secret=True)
+    password = ask("DB password")
     with Spinner(f"Testing connection to {host}:{port}"):
         reachable, info = test_tcp(host, port)
     if reachable:
@@ -280,7 +311,7 @@ def setup_accounting(env: dict, settings: dict) -> None:
 
 
 def setup_permissions(env: dict, settings: dict) -> None:
-    section(5, 5, "Agent Permissions", "What the AI is allowed to read & do")
+    section(5, 6, "Agent Permissions", "What the AI is allowed to read & do")
     perms = {}
     perms["web_search"] = ask_yes("Allow web search?", True)
     perms["calculator"] = ask_yes("Allow calculator?", True)
@@ -295,6 +326,80 @@ def setup_permissions(env: dict, settings: dict) -> None:
     settings["permissions"] = perms
     enabled = [k for k, v in perms.items() if v]
     ok(f"Enabled: {', '.join(enabled) or 'none'}")
+
+
+def link_whatsapp_now(env: dict) -> None:
+    """Final step: launch the bridge, show the QR inside the wizard, wait for the scan."""
+    section(6, 6, "Link WhatsApp Now", "Scan the QR with your phone")
+    if env.get("WHATSAPP_ENABLED") != "true":
+        warn("WhatsApp is disabled - skipping linking.")
+        return
+    if not ask_yes("Link your WhatsApp number now? (QR will appear here)", True):
+        warn("Skipped. The QR will appear on the first 'python start.py' run instead.")
+        return
+
+    node = node_cmd()
+    npm = npm_cmd()
+    if not node or not npm:
+        fail("Node.js is not installed - cannot link WhatsApp here.")
+        print(c("    Install it from https://nodejs.org then run: python start.py", "dim"))
+        return
+
+    wa_dir = os.path.join(ROOT, "whatsapp")
+    if not os.path.isdir(os.path.join(wa_dir, "node_modules")):
+        step = "Installing WhatsApp bridge dependencies (first time, ~1-3 min)"
+        with Spinner(step):
+            r = subprocess.run(f'"{npm}" install', cwd=wa_dir, shell=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if r.returncode != 0:
+            fail("npm install failed. Run 'cd whatsapp && npm install' manually.")
+            return
+        ok("Dependencies installed")
+
+    print()
+    print(c("  Starting the bridge... the QR code will appear below.", "cyan"))
+    print(c("  On your phone: WhatsApp -> Linked devices -> Link a device", "dim"))
+    print(c("  Waiting up to 3 minutes for you to scan.\n", "dim"))
+
+    wa_env = dict(os.environ)
+    wa_env.update({
+        "AGENT_URL": "http://localhost:8000",
+        "WHATSAPP_PORT": "3001",
+        "ADMIN_KEY": env.get("ADMIN_KEY", "dev-admin-key"),
+        "USER_KEY": env.get("USER_KEY", "dev-user-key"),
+        "WHATSAPP_ROLE": env.get("WHATSAPP_ROLE", "user"),
+        "BOT_PREFIX": env.get("BOT_PREFIX", ""),
+        "IGNORE_GROUPS": env.get("IGNORE_GROUPS", "true"),
+        "ALLOWED_NUMBERS": env.get("ALLOWED_NUMBERS", ""),
+        "WHATSAPP_ENABLED": "true",
+    })
+    proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
+    try:
+        deadline = time.time() + 180
+        linked = False
+        while time.time() < deadline:
+            try:
+                with urllib.request.urlopen("http://localhost:3001/status", timeout=3) as r:
+                    if json.loads(r.read()).get("status") == "ready":
+                        linked = True
+                        break
+            except Exception:
+                pass
+            if proc.poll() is not None:
+                break
+            time.sleep(3)
+        print()
+        if linked:
+            ok("WhatsApp LINKED successfully! Session saved - no QR needed next time.")
+        else:
+            warn("Not linked yet (timeout or bridge stopped).")
+            print(c("    No problem: run 'python start.py' and the QR will show again.", "dim"))
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
 
 
 # ---------------------------------------------------------------- output
@@ -312,17 +417,18 @@ def write_files(env: dict, settings: dict) -> None:
         f"BOT_PREFIX={env.get('BOT_PREFIX', '')}",
         f"IGNORE_GROUPS={env.get('IGNORE_GROUPS', 'true')}",
         f"WHATSAPP_ROLE={env.get('WHATSAPP_ROLE', 'user')}",
+        f"ALLOWED_NUMBERS={env.get('ALLOWED_NUMBERS', '')}",
     ]
     with open(ENV_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(env_lines) + "\n")
-    os.makedirs("config", exist_ok=True)
+    os.makedirs(os.path.join(ROOT, "config"), exist_ok=True)
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
-    ok(f"Wrote {ENV_FILE}")
-    ok(f"Wrote {SETTINGS_FILE}")
+    ok(f"Wrote .env")
+    ok(f"Wrote config/settings.json")
 
 
-def box_line(text: str, width: int = 62) -> str:
+def box_line(text: str, width: int = 64) -> str:
     pad = width - len(ANSI.sub("", text))
     return c("  | ", "cyan") + text + " " * max(pad, 0) + c(" |", "cyan")
 
@@ -330,36 +436,36 @@ def box_line(text: str, width: int = 62) -> str:
 def print_summary(env: dict, settings: dict) -> None:
     perms = ", ".join(k for k, v in settings.get("permissions", {}).items() if v) or "none"
     print()
-    print(c("  +" + "=" * 64 + "+", "cyan"))
+    print(c("  +" + "=" * 66 + "+", "cyan"))
     print(box_line(c("SETUP COMPLETE", "green", "bold")))
-    print(c("  +" + "=" * 64 + "+", "cyan"))
-    print(box_line(f"AI model ...... {env.get('DEFAULT_MODEL', '')[:45]}"))
+    print(c("  +" + "=" * 66 + "+", "cyan"))
+    print(box_line(f"AI model ...... {env.get('DEFAULT_MODEL', '')[:47]}"))
     wa = "enabled" if env.get("WHATSAPP_ENABLED") == "true" else "disabled"
-    print(box_line(f"WhatsApp ...... {wa} (role: {env.get('WHATSAPP_ROLE', 'user')}, prefix: '{env.get('BOT_PREFIX', '')}')"))
+    nums = env.get("ALLOWED_NUMBERS", "") or "everyone"
+    print(box_line(f"WhatsApp ...... {wa} (role: {env.get('WHATSAPP_ROLE', 'user')})"))
+    print(box_line(f"Allowed nums .. {nums[:48]}"))
     acc = "connected" if env.get("ACCOUNTING_DB_URL") else "not configured"
     print(box_line(f"Accounting .... {acc}"))
-    print(box_line(f"Permissions ... {perms[:46]}"))
-    print(c("  +" + "-" * 64 + "+", "cyan"))
+    print(box_line(f"Permissions ... {perms[:48]}"))
+    print(c("  +" + "-" * 66 + "+", "cyan"))
     print(box_line(c("YOUR API KEYS - SAVE THESE:", "yellow")))
     print(box_line(c(f"Admin: {env.get('ADMIN_KEY', '')}", "green")))
     print(box_line(c(f"User:  {env.get('USER_KEY', '')}", "green")))
-    print(c("  +" + "-" * 64 + "+", "cyan"))
-    print(box_line(c("NEXT STEPS:", "yellow")))
-    print(box_line("1. Start:  uvicorn api.main:app --host 0.0.0.0 --port 8000"))
-    print(box_line("2. Dashboard:  http://localhost:8000"))
-    print(box_line("3. WhatsApp:   cd whatsapp && npm install && npm start"))
-    print(box_line("   then scan QR at http://localhost:3001"))
+    print(c("  +" + "-" * 66 + "+", "cyan"))
+    print(box_line(c("START EVERYTHING WITH ONE COMMAND:", "yellow")))
+    print(box_line(c("   python start.py", "green", "bold")))
+    print(box_line("Dashboard:  http://localhost:8000"))
     if env.get("DEFAULT_MODEL", "").startswith("ollama:"):
         model = env["DEFAULT_MODEL"].split(":", 1)[-1]
-        print(box_line(f"4. First time: ollama pull {model}"))
-    print(c("  +" + "=" * 64 + "+", "cyan"))
+        print(box_line(f"(first time: ollama pull {model})"))
+    print(c("  +" + "=" * 66 + "+", "cyan"))
     print()
 
 
 def main() -> None:
     banner()
     env: dict = {}
-    settings: dict = {"version": 1}
+    settings: dict = {"version": 2}
     try:
         setup_llm(env, settings)
         setup_security(env, settings)
@@ -373,8 +479,10 @@ def main() -> None:
     print()
     write_files(env, settings)
     print_summary(env, settings)
-    if shutil.which("docker") and ask_yes("Start the platform now with Docker?", False):
-        subprocess.run(["docker", "compose", "up", "-d", "--build"], cwd="deploy")
+    try:
+        link_whatsapp_now(env)
+    except KeyboardInterrupt:
+        warn("Linking interrupted - run 'python start.py' to link later.")
 
 
 if __name__ == "__main__":
