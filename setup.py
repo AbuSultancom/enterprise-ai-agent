@@ -281,6 +281,8 @@ def step_channels(env: dict, settings: dict) -> None:
         print(c("    Example: 967712345678,8613800138000", "dim"))
         nums = ask("Allowed WhatsApp numbers", "")
         env["ALLOWED_NUMBERS"] = ",".join(_re.sub(r"\D", "", n) for n in nums.split(",") if n.strip())
+        # the numbers you whitelist get admin powers by default (edit ADMIN_NUMBERS in .env to change)
+        env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
         ok(f"WhatsApp: prefix '{env['BOT_PREFIX'] or '(all)'}', role {env['WHATSAPP_ROLE']}, "
            f"allowed: {env['ALLOWED_NUMBERS'] or 'everyone'}")
         settings["channels"]["whatsapp"] = {"role": env["WHATSAPP_ROLE"],
@@ -413,6 +415,11 @@ def link_whatsapp_now(env: dict) -> None:
         "BOT_PREFIX": env.get("BOT_PREFIX", ""),
         "IGNORE_GROUPS": env.get("IGNORE_GROUPS", "true"),
         "ALLOWED_NUMBERS": env.get("ALLOWED_NUMBERS", ""),
+        "ADMIN_NUMBERS": env.get("ADMIN_NUMBERS", ""),
+        "CHAT_MEMORY": env.get("CHAT_MEMORY", "5"),
+        "REPORT_ENABLED": env.get("REPORT_ENABLED", "false"),
+        "REPORT_TIME": env.get("REPORT_TIME", "08:00"),
+        "REPORT_TO": env.get("REPORT_TO", ""),
         "WHATSAPP_ENABLED": "true",
     })
     proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
@@ -460,6 +467,11 @@ def write_files(env: dict, settings: dict) -> None:
         f"IGNORE_GROUPS={env.get('IGNORE_GROUPS', 'true')}",
         f"WHATSAPP_ROLE={env.get('WHATSAPP_ROLE', 'user')}",
         f"ALLOWED_NUMBERS={env.get('ALLOWED_NUMBERS', '')}",
+        f"ADMIN_NUMBERS={env.get('ADMIN_NUMBERS', '')}",
+        f"CHAT_MEMORY={env.get('CHAT_MEMORY', '5')}",
+        f"REPORT_ENABLED={env.get('REPORT_ENABLED', 'false')}",
+        f"REPORT_TIME={env.get('REPORT_TIME', '08:00')}",
+        f"REPORT_TO={env.get('REPORT_TO', '')}",
         f"TELEGRAM_ENABLED={env.get('TELEGRAM_ENABLED', 'false')}",
         f"TELEGRAM_BOT_TOKEN={env.get('TELEGRAM_BOT_TOKEN', '')}",
         f"TELEGRAM_ALLOWED={env.get('TELEGRAM_ALLOWED', '')}",
