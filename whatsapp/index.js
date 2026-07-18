@@ -69,6 +69,7 @@ client.on('ready', () => {
   status = 'ready';
   qrDataUrl = null;
   console.log('WhatsApp client is ready');
+  console.log(`Listening: prefix=${PREFIX ? JSON.stringify(PREFIX) : '(reply to all)'} · groups=${IGNORE_GROUPS ? 'ignored' : 'allowed'} · allowed=${ALLOWED.length ? ALLOWED.join(',') : 'everyone'}`);
 });
 
 client.on('disconnected', (reason) => {
@@ -81,16 +82,21 @@ client.on('message', async (msg) => {
     if (msg.fromMe) return;
     if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) return;
 
+    console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
+
     // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
     const sender = msg.from.replace(/\D/g, '');
     if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
-      console.log('Ignored message from non-allowed number:', sender);
+      console.log('  -> ignored: number not in ALLOWED_NUMBERS');
       return;
     }
 
     let text = msg.body.trim();
     if (PREFIX) {
-      if (!text.startsWith(PREFIX)) return;
+      if (!text.startsWith(PREFIX)) {
+        console.log(`  -> ignored: does not start with prefix "${PREFIX}"`);
+        return;
+      }
       text = text.slice(PREFIX.length).trim();
       if (!text) return;
     }
