@@ -68,12 +68,27 @@ ERROR_HINT = (
 def _build_system_prompt(tools_desc: str) -> str:
     import datetime
     identity = config_loader.agent_identity() if config_loader else {}
+
+    # Get learning context
+    learning_context = ""
+    try:
+        from memory.learning import learner
+        learning_context = "\n" + learner.get_learning_context()
+        personality_hint = learner.get_personality_hint()
+        if personality_hint:
+            learning_context += f"\n\n=== LEARNED PREFERENCES ===\n{personality_hint}"
+    except Exception:
+        pass
+
     prompt = SYSTEM_PROMPT.format(
         name=identity.get("name", "an enterprise AI agent"),
         personality=identity.get("personality", "a professional, concise enterprise assistant"),
         date=datetime.date.today().isoformat(),
         tools=tools_desc,
     )
+    if learning_context:
+        prompt += f"\n\n=== USER PROFILE (learned from past conversations) ===\n{learning_context}"
+
     lang = identity.get("language", "auto")
     if lang == "ar":
         prompt += "\nAlways answer in Arabic, regardless of the question's language."

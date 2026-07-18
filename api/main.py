@@ -192,6 +192,21 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
     answer = result.get("answer", "")
     conv_store.save_message(session_id, "assistant", answer)
 
+    # Learn from this exchange
+    try:
+        from memory.learning import learner
+        tools_used = [s.get("tool", "") for s in result.get("steps", [])]
+        learner.learn_from_exchange(req.message, answer, tools_used)
+        # Auto-learn facts from tool results
+        for step in result.get("steps", []):
+            result_text = str(step.get("result", ""))
+            if "weather" in step.get("tool", ""):
+                city = req.message.replace("طقس", "").replace("weather", "").strip().strip("?").strip()
+                if city:
+                    learner.learn_fact(f"last_weather_check", f"{city}: {result_text[:100]}")
+    except Exception:
+        pass
+
     # Auto-title: rename session if still "New conversation"
     sessions = conv_store.list_sessions(limit=1)
     if sessions and sessions[0]["title"] == "New conversation":
@@ -237,6 +252,12 @@ async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin
         full = "".join(answer_parts)
         if full:
             conv_store.save_message(session_id, "assistant", full)
+            # Learn from streaming exchange
+            try:
+                from memory.learning import learner
+                learner.learn_from_exchange(req.message, full)
+            except Exception:
+                pass
         # Auto-title for streaming
         sessions = conv_store.list_sessions(limit=1)
         if sessions and sessions[0]["title"] == "New conversation":
