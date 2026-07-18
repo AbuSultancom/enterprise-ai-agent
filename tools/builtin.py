@@ -682,3 +682,83 @@ async def add_employee_tool(name: str, role: str = "", department: str = "",
                             phone: str = "", email: str = "", name_en: str = "") -> str:
     return await _add_emp(name, role, department, phone, email, name_en)
 
+
+# ─── Admin Settings Tools ───────────────────────────────────────
+from tools.settings import (
+    change_model as _cm, change_language as _cl,
+    change_personality as _cp, toggle_tool as _tt,
+    change_whatsapp_prefix as _cwp, add_api_key as _aak,
+    toggle_channel as _tc, add_provider as _ap,
+    restart_agent as _ra, show_current_config as _scc,
+)
+
+@registry.register(
+    description="Change the AI model/provider. Use when asked to change model.",
+    parameters={"provider":{"type":"str","description":"Provider: ollama, openai, deepseek, custom"},"model":{"type":"str","description":"Model name"}},
+)
+async def change_model_tool(provider: str, model: str) -> str:
+    return await _cm(provider, model)
+
+@registry.register(
+    description="Change agent response language. Use for toggle Arabic/English.",
+    parameters={"language":{"type":"str","description":"ar, en, or auto"}},
+)
+async def change_language_tool(language: str) -> str:
+    return await _cl(language)
+
+@registry.register(
+    description="Change agent personality/style. Use when user wants agent to be more formal, friendly, etc.",
+    parameters={"personality":{"type":"str","description":"New personality description"}},
+)
+async def change_personality_tool(personality: str) -> str:
+    return await _cp(personality)
+
+@registry.register(
+    description="Enable or disable a tool. Use when user wants to turn off/on a feature.",
+    parameters={"tool_name":{"type":"str","description":"Tool name"},"enabled":{"type":"bool","description":"True=enable, False=disable"}},
+)
+async def toggle_tool_tool(tool_name: str, enabled: bool = True) -> str:
+    return await _tt(tool_name, enabled)
+
+@registry.register(
+    description="Change WhatsApp bot prefix. Use to set/remove the prefix word.",
+    parameters={"prefix":{"type":"str","description":"New prefix (empty=respond to all)"}},
+)
+async def change_whatsapp_prefix_tool(prefix: str) -> str:
+    return await _cwp(prefix)
+
+@registry.register(
+    description="Add or update an API key. Use when user gives a new key.",
+    parameters={"name":{"type":"str","description":"Key name (openai, deepseek, custom)"},"key":{"type":"str","description":"The API key"}},
+)
+async def add_api_key_tool(name: str, key: str) -> str:
+    return await _aak(name, key)
+
+@registry.register(
+    description="Enable or disable a channel (WhatsApp/Telegram).",
+    parameters={"channel":{"type":"str","description":"whatsapp or telegram"},"enabled":{"type":"bool","description":"True=enable"}},
+)
+async def toggle_channel_tool(channel: str, enabled: bool = True) -> str:
+    return await _tc(channel, enabled)
+
+@registry.register(
+    description="Add a new LLM provider (custom API endpoint). Use when user wants to add a new cloud/local provider.",
+    parameters={"name":{"type":"str","description":"Provider name"},"base_url":{"type":"str","description":"API base URL"},"api_key":{"type":"str","description":"API key"},"models":{"type":"str","description":"Comma-separated model names"}},
+)
+async def add_provider_tool(name: str, base_url: str, api_key: str, models: str = "") -> str:
+    return await _ap(name, base_url, api_key, models)
+
+@registry.register(
+    description="Restart the agent process.",
+    parameters={},
+)
+async def restart_agent_tool() -> str:
+    return await _ra()
+
+@registry.register(
+    description="Show all current configuration settings. Use when asked about current setup.",
+    parameters={},
+)
+async def show_config_tool() -> str:
+    return await _scc()
+
