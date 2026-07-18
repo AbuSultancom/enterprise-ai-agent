@@ -1190,7 +1190,8 @@ function togglePin(id) {
 async function loadConv(id){
   currentConv=id;
   document.getElementById('convName').textContent='...';
-  document.getElementById('welcome').style.display='none';
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.style.display='none';
   const msgs=document.getElementById('messages');
   msgs.innerHTML='<div class="msg thinking"><div class="thinking-dots"><span></span><span></span><span></span></div></div>';
   try{
@@ -1213,7 +1214,7 @@ async function loadConv(id){
     loadConvs();
     // Close sidebar on mobile
     if (window.innerWidth <= 768) closeSidebar();
-  }catch(e){console.error('loadConv failed:',e);msgs.innerHTML='<div style="text-align:center;padding:30px;color:var(--danger)">⚠️ خطأ في تحميل المحادثة: '+e.message+'</div>';document.getElementById('welcome').style.display='none'}
+  }catch(e){console.error('loadConv failed:',e);msgs.innerHTML='<div style="text-align:center;padding:30px;color:var(--danger)">⚠️ خطأ في تحميل المحادثة: '+e.message+'</div>';if(welcome) welcome.style.display='none'}
 }
 
 async function deleteConv(id){
@@ -1226,7 +1227,8 @@ async function deleteConv(id){
     if(currentConv===id){
       currentConv=null;
       document.getElementById('messages').innerHTML='';
-      document.getElementById('welcome').style.display='flex';
+      const welcome=document.getElementById('welcome');
+      if(welcome) welcome.style.display='flex';
       document.getElementById('convName').textContent=t('new_conv');
     }
     loadConvs();
@@ -1236,7 +1238,8 @@ async function deleteConv(id){
 function newChat(){
   currentConv=null;
   document.getElementById('messages').innerHTML='';
-  document.getElementById('welcome').style.display='flex';
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.style.display='flex';
   document.getElementById('convName').textContent=t('new_conv');
   document.getElementById('input').value='';
   document.getElementById('input').focus();
@@ -1287,7 +1290,8 @@ function exportChat(){
 // === Chat ===
 function addMsg(role,content,timestamp){
   const msgs=document.getElementById('messages');
-  document.getElementById('welcome').style.display='none';
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.style.display='none';
   // Remove thinking indicator
   const thinking=msgs.querySelector('.msg.thinking');
   if(thinking) thinking.remove();
@@ -1324,7 +1328,8 @@ function copyMsg(btn){
 
 function showThinking(){
   const msgs=document.getElementById('messages');
-  document.getElementById('welcome').style.display='none';
+  const welcome=document.getElementById('welcome');
+  if(welcome) welcome.style.display='none';
   const existing=msgs.querySelector('.msg.thinking');
   if(existing) return;
   const div=document.createElement('div');
