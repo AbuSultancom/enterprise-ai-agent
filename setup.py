@@ -299,35 +299,42 @@ def box_line(text: str, width: int = 60) -> str:
 def banner() -> None:
     clear()
     print(color(r"""
-     ___                   _                ___
-    | __|_ ___ __ _ _ __  (_)___ _ _  ___  |_ _|
-    | _|\ \ / '_ \ '_ \ | | / -_) ' \/ -_)  | |
-    |___/_\_\ .__/ .__/_|_|_\___|_||_\___| |___|
-            |_|  |_|
+    ╔══════════════════════════════════════════════╗
+    ║     ___                   _                ║
+    ║    | __|_ ___ __ _ _ __  (_)___ _ _  ___   ║
+    ║    | _|\ \ / '_ \ '_ \ | | / -_) ' \/ -_)  ║
+    ║    |___/_\_\ .__/ .__/_|_|_\___|_||_\___|  ║
+    ║            |_|  |_|                        ║
+    ╚══════════════════════════════════════════════╝
     """, "cyan", "bold"))
-    print(color(f"   {L['welcome_title']}", "bold"))
+    print(color(f"   ╔══ {L['welcome_title']} ══╗", "bold"))
     print()
     for i, s in enumerate(L["steps"], 1):
         print(color(f"     {i:>2}. {s}", "dim"))
     print()
     print(color(f"   {L['press_enter']}", "yellow"))
     input(color("   ▶ ", "green", "bold"))
+    clear()
 
 
 def progress_bar(done: int) -> str:
     filled = done * 20 // TOTAL_STEPS
-    bar = color("█" * filled, "green") + color("░" * (20 - filled), "dim")
     pct = done * 100 // TOTAL_STEPS
-    return f"  {bar}  {color(str(pct) + '%', 'bold')}  "
+    bar = color("█" * filled, "green") + color("░" * (20 - filled), "dim")
+    step_text = f"{done}/{TOTAL_STEPS}" if done > 0 else "   "
+    return f"  {bar}  {color(str(pct) + '%', 'bold')}  {color(step_text, 'dim')}  "
 
 
 def section(num: int, subtitle: str = "") -> None:
     print()
     pbar = progress_bar(num - 1)
     title = L["step_titles"][num - 1]
-    print(pbar + color(f"  ═══ {title} ═══", "bold"))
+    print(color("  ┌" + "─" * 62 + "┐", "cyan"))
+    print(pbar + color("│", "cyan") + color(f" {title} ", "bold") + color("│", "cyan"))
+    print(color("  ├" + "─" * 62 + "┤", "cyan"))
     if subtitle:
-        print(color(f"       {subtitle}", "dim"))
+        print(color(f"  │ {subtitle}".ljust(66) + "│", "dim"))
+    print(color("  └" + "─" * 62 + "┘", "cyan"))
     print()
 
 
@@ -755,6 +762,7 @@ def _print_summary(env: dict, settings: dict) -> None:
     print(box_line(color(f"  {L['start_cmd']}", "yellow", "bold"), w - 4))
     print(box_line(f"  {color('python start.py', 'cyan', 'bold')}", w - 4))
     print(box_line(f"  {color('http://localhost:8000', 'cyan')}", w - 4))
+    print(box_line(f"  {color('http://localhost:3001', 'cyan')}" + "  (WhatsApp QR)", w - 4))
     if env.get("DEFAULT_MODEL", "").startswith("ollama:"):
         model = env["DEFAULT_MODEL"].split(":", 1)[-1]
         print(box_line(color(f"  (first time: ollama pull {model})", "dim"), w - 4))
