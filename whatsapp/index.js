@@ -186,6 +186,11 @@ client.on('message', async (msg) => {
     const chatId = msg.from;
     const sender = msg.from.replace(/\D/g, '');
 
+    // Skip status updates (broadcasts from status@broadcast)
+    if (msg.from === 'status@broadcast') return;
+    // Skip group messages if configured
+    if (msg.from.endsWith('@g.us') || msg.from.endsWith('@broadcast')) return;
+
     // ---- Image messages (invoice/receipt photos) ----
     if (msg.hasMedia) {
       const caption = (msg.body || '').trim();
@@ -258,10 +263,19 @@ client.on('message', async (msg) => {
     const history = MEMORY_TURNS > 0 ? (histories.get(chatId) || []) : [];
 
     await msg.reply('⏳ ...');
-    const chat = await msg.getChat();
-    await chat.sendStateTyping();
+    try {
+      const chat = await msg.getChat();
+      await chat.sendStateTyping();
+    } catch (e) {
+      // typing indicator is optional — continue even if it fails
+    }
     const answer = await askAgent(question, apiKey, history, chatId);
-    await chat.clearState();
+    try {
+      const chat = await msg.getChat();
+      await chat.clearState();
+    } catch (e) {
+      // typing indicator cleanup is optional
+    }
 
     if (MEMORY_TURNS > 0 && !answer.startsWith('Agent error:')) {
       history.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
