@@ -1,1132 +1,501 @@
 #!/usr/bin/env python3
 """
-Enterprise AI Agent — Onboarding Wizard (v4)
+Enterprise AI Agent — Onboarding Wizard (v5)
 ============================================
-Clean, modern, bilingual (AR/EN) setup experience.
-
+Premium Dashboard-style setup experience.
+Bilingual Arabic/English support.
 Run:  python setup.py
+
+Developer: @Abdulhameed · github.com/AbuSultancom
 """
 from __future__ import annotations
 
-import json
-import os
-import re as _re
-import secrets
-import shutil
-import socket
-import subprocess
-import sys
-import threading
-import time
-import urllib.request
+import json, os, re, secrets, shutil, socket, subprocess, sys, time, urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(ROOT, ".env")
 SETTINGS_FILE = os.path.join(ROOT, "config", "settings.json")
 TOTAL_STEPS = 7
-EXPRESS_MODE = False
-SKIP_ACCOUNTING = False
 
-# ─── ANSI palette ────────────────────────────────────────────────
-C = {
-    "reset": "\033[0m",
-    "bold": "\033[1m",
-    "dim": "\033[2m",
-    "green": "\033[92m",
-    "yellow": "\033[93m",
-    "blue": "\033[94m",
-    "cyan": "\033[96m",
-    "red": "\033[91m",
-    "magenta": "\033[95m",
-}
-ANSI_RE = _re.compile(r"\033\[[0-9;]*m")
+# ─── Colors ───
+R = "\033[0m"
+B = "\033[1m"
+D = "\033[2m"
+K = {"r": "\033[91m", "g": "\033[92m", "y": "\033[93m", "b": "\033[94m", "m": "\033[95m", "c": "\033[96m"}
 
 
-def color(text: str, *styles: str) -> str:
-    if not styles:
-        return text
-    return "".join(C.get(s, "") for s in styles) + text + C["reset"]
+def c(t, *k): return "".join(K.get(x, "") for x in k) + t + R if k else t
 
 
-def clear() -> None:
-    os.system("cls" if os.name == "nt" else "clear")
+def clr(): sys.stdout.write("\033[2J\033[H"); sys.stdout.flush()
 
 
-# ─── Bilingual strings ────────────────────────────────────────────
-LANG = "ar"  # will be set by user at start
+def ask(p, d=""):
+    pr = f"  {p}" + (f" [{d}]" if d else "")
+    v = input(f"{pr}: ").strip()
+    return v if v else d
 
-def t(key: str) -> str:
-    """Get translation for current language."""
-    return STR[LANG].get(key, key) if 'STR' in dir() else key
 
-# STR dictionary starts on next line
+def yn(p, d=True):
+    return ask(p, "Y" if d else "N").lower()[:1] in ("y", "ن")
 
+
+def ch(p, opts, d=0):
+    print(f"  {p}")
+    for i, o in enumerate(opts): print(f"    {c('→','g') if i == d else ' '} {i+1}) {o}")
+    try: return int(ask("  ▶ " + "اختر / Choose", str(d + 1))) - 1
+    except: return d
+
+
+# ─── Bilingual ───
+LANG = "ar"
 STR = {
     "ar": {
-        "welcome_title": "مرحباً بك في معالج إعداد وكيل الذكاء الاصطناعي",
-        "welcome_desc": "هذا المعالج يهيئ وكيلك في 7 خطوات خلال ~3 دقائق",
-        "steps": [
-            "مزود الذكاء — اختر الموديل (محلي أو سحاب)",
-            "هوية الوكيل — الاسم، اللغة، الشخصية",
-            "الأمان — مفاتيح API للوحة التحكم والقنوات",
-            "القنوات — واتساب، تلغرام، جهات الاتصال المسموحة",
-            "المحاسبة — ربط بقاعدة بيانات Onyx Pro",
-            "الصلاحيات — الأدوات المسموح للوكيل استخدامها",
-            "إنهاء — حفظ الإعدادات + ربط واتساب",
-        ],
-        "step_titles": [
-            "مزود الذكاء",
-            "هوية الوكيل",
-            "الأمان",
-            "القنوات",
-            "المحاسبة",
-            "الصلاحيات",
-            "إنهاء",
-        ],
-        "press_enter": "اضغط Enter للبدء...",
-        "model_prompt": "أي مزود تريد استخدامه؟",
-        "model_ollama": "Ollama — محلي، مجاني، خصوصي (موصى به)",
-        "model_deepseek": "DeepSeek — سحاب، رخيص وقوي",
-        "model_openai": "OpenAI — سحاب (GPT-4o...)",
-        "model_other": "نقطة نهاية متوافقة مع OpenAI (Qwen / vLLM...)",
-        "ollama_model": "اسم الموديل في Ollama",
-        "ollama_url": "رابط Ollama",
-        "ollama_check_ok": "Ollama يعمل",
-        "ollama_check_fail": "لا يمكن الوصول إلى Ollama",
-        "api_base": "رابط API الأساسي",
-        "api_key": "مفتاح API",
-        "model_name": "اسم الموديل",
-        "api_check_ok": "مفتاح API يعمل",
-        "api_check_fail": "تعذر التحقق من المفتاح — تم الحفظ على أي حال",
-        "no_api_key": "لم تدخل مفتاح API — المكالمات السحابية ستفشل حتى تضبط OPENAI_API_KEY",
-        "model_ok": "الموديل",
-        "agent_name": "اسم الوكيل (الذي يظهر للمستخدمين)",
-        "agent_lang": "بأي لغة يجب أن يرد الوكيل؟",
-        "lang_auto": "نفس لغة المستخدم (تلقائي)",
-        "lang_ar": "العربية — يرد بالعربية دائماً",
-        "lang_en": "English — always answers in English",
-        "agent_personality": "الشخصية / التعليمات (سطر واحد)",
-        "personality_default": "مساعد مؤسسي محترف ومختصر",
-        "identity_ok": "الهوية",
-        "gen_keys": "توليد مفاتيح API عشوائية آمنة؟",
-        "keys_generated": "تم توليد المفاتيح (ستظهر في النهاية — احفظها)",
-        "admin_key": "مفتاح المشرف (صلاحية كاملة)",
-        "user_key": "مفتاح المستخدم (محادثة فقط)",
-        "enable_whatsapp": "تفعيل قناة واتساب؟ (تسجيل دخول QR)",
-        "wa_warn": "بروتوكول واتساب غير رسمي — استخدم رقماً مخصصاً للبوت",
-        "wa_prefix": "يرد فقط على الرسائل التي تبدأ ببادئة؟ (اترك فارغاً للكل)",
-        "wa_ignore_groups": "تجاهل المجموعات؟",
-        "wa_role_prompt": "أي صلاحية لمستخدمي واتساب؟",
-        "wa_role_user": "user — محادثة وأدوات آمنة فقط (موصى به)",
-        "wa_role_admin": "admin — كل شيء بما في ذلك المحاسبة (للمالك فقط)",
-        "wa_allowed": "الأرقام المسموحة (دولي، مفصول بفاصلة؛ فارغ = الجميع)",
-        "wa_allowed_example": "مثال: 967712345678,966501234567",
-        "wa_ok": "واتساب",
-        "enable_telegram": "تفعيل قناة تلغرام؟ (بوت Token)",
-        "tg_create_hint": "أنشئ بوتاً مع @BotFather على تلغرام لتحصل على Token",
-        "tg_token": "Token البوت",
-        "tg_check_ok": "Token البوت صحيح",
-        "tg_check_fail": "تعذر التحقق من Token — تم الحفظ على أي حال",
-        "tg_no_token": "لم تدخل Token — بوت تلغرام لن يعمل حتى تضبط TELEGRAM_BOT_TOKEN",
-        "tg_allowed": "مستخدمي تلغرام المسموحين (IDs أو @usernames، فارغ = الجميع)",
-        "tg_ok": "تلغرام",
-        "enable_accounting": "ربط قاعدة بيانات المحاسبة الآن؟",
-        "acc_skip": "تم التجاهل. اضبط ACCOUNTING_DB_URL في .env لاحقاً",
-        "acc_host": "الخادم (host/IP)",
-        "acc_port": "المنفذ",
-        "acc_db": "اسم قاعدة البيانات",
-        "acc_user": "مستخدم DB (للقراءة فقط!)",
-        "acc_pass": "كلمة مرور DB",
-        "acc_server_ok": "الخادم يمكن الوصول إليه",
-        "acc_server_fail": "لا يمكن الوصول إلى الخادم — تم الحفظ على أي حال",
-        "acc_warn": "عدل أسماء الجداول في connectors/accounting.py حسب هيكل Onyx لديك",
-        "acc_ok": "تم حفظ اتصال المحاسبة",
-        "acc_db_type_prompt": "اختر نوع قاعدة البيانات:",
-        "acc_db_sqlserver": "🟦 SQL Server — Onyx Pro، أنظمة Microsoft ERP",
-        "acc_db_oracle": "🟥 Oracle — مستخدمي Toad، Oracle Database",
-        "acc_db_mysql": "🟩 MySQL — تطبيقات الويب، CMS، التجارة الإلكترونية",
-        "acc_db_postgresql": "🟨 PostgreSQL — تطبيقات الويب الحديثة، التحليلات",
-        "acc_db_direct": "⬜ رابط مباشر — أي رابط SQLAlchemy متوافق",
-        "acc_service_name": "اسم الخدمة (مثال: ORCL, XE)",
-        "acc_db_name": "اسم قاعدة البيانات",
-        "acc_direct_url": "رابط الاتصال الكامل",
-        "acc_display_name": "اسم العرض (للتسمية)",
-        "acc_add_another": "إضافة قاعدة بيانات أخرى؟",
-        "acc_saved_multi": "تم حفظ {} قاعدة بيانات في config/accounting_schema.json",
-        "acc_db_number": "قاعدة بيانات",
-        "acc_url_built": "رابط الاتصال:",
-        "acc_discover_schema": "اكتشاف هيكل الجداول تلقائياً؟",
-        "perm_web": "السماح بالبحث في الويب؟",
-        "perm_calc": "السماح بالآلة الحاسبة؟",
-        "perm_time": "السماح بالتاريخ والوقت؟",
-        "perm_file": "السماح بقراءة الملفات؟",
-        "perm_accounting": "السماح للوكيل باستعلام بيانات المحاسبة؟",
-        "perm_knowledge": "استخدام قاعدة المعرفة (مستندات الشركة)؟",
-        "perm_conversations": "السماح للوكيل بالبحث في المحادثات السابقة؟",
-        "perm_reports": "السماح بإنشاء وعرض التقارير؟",
-        "perm_enabled": "التفعيلات",
-        "link_wa_now": "ربط واتساب الآن؟ (سيظهر QR هنا)",
-        "link_wa_skip": "تم التجاهل. سيظهر QR عند أول تشغيل لـ start.py",
-        "link_wa_no_node": "Node.js غير مثبت — لا يمكن ربط واتساب هنا",
-        "node_hint": "ثبته من https://nodejs.org ثم اركض: python start.py",
-        "npm_install": "تثبيت اعتماديات واتساب",
-        "npm_fail": "فشل تثبيت npm. اركض: cd whatsapp && npm install يدوياً",
-        "link_start": "تشغيل الجسر... سيظهر QR أدناه",
-        "link_phone_hint": "على هاتفك: واتساب → الأجهزة المرتبطة → ربط جهاز",
-        "link_wait": "الانتظار حتى 3 دقائق للفحص",
-        "link_ok": "واتساب مرتبط بنجاح!",
-        "link_timeout": "لم يتم الربط بعد (انتهت المهلة أو توقف الجسر). لا مشكلة: اركض start.py وسيظهر QR مجدداً",
-        "summary_title": "✅  تم الإعداد بنجاح",
-        "keys_warn": "🔑  مفاتيح API — احفظها",
-        "start_cmd": "🚀  شغّل كل شيء بأمر واحد",
-        "yes": "نعم",
-        "no": "لا",
-        "choose": "اختر",
-        "aborted": "تم الإلغاء — لم يتم حفظ أي شيء.",
-        "admin": "مشرف",
-        "user": "مستخدم",
+        "dev": "AbuSultancom",
+        "lang_choose": "اختر لغتك / Choose language",
+        "go": "اضغط Enter للبدء",
+        "skip_q": "تخطي هذه الخطوة؟",
+        "done": "✅ تم",
     },
     "en": {
-        "welcome_title": "Welcome! Configure your AI agent in ~3 minutes",
-        "welcome_desc": "This wizard will set up everything in 7 steps:",
-        "steps": [
-            "Model provider — local or cloud model",
-            "Agent identity — name, language, personality",
-            "Security — API keys for dashboard & channels",
-            "Channels — WhatsApp, Telegram, allowed contacts",
-            "Accounting — Onyx Pro read-only connection",
-            "Permissions — tools the agent may use",
-            "Finish — save + optional WhatsApp QR linking",
-        ],
-        "step_titles": [
-            "Model Provider",
-            "Agent Identity",
-            "Security",
-            "Channels",
-            "Accounting",
-            "Permissions",
-            "Finish",
-        ],
-        "press_enter": "Press Enter to begin...",
-        "model_prompt": "Which provider do you want to use?",
-        "model_ollama": "Ollama — local, private, free (recommended)",
-        "model_deepseek": "DeepSeek — cloud API, cheap & strong",
-        "model_openai": "OpenAI — cloud API (GPT-4o etc.)",
-        "model_other": "Other OpenAI-compatible endpoint (Qwen / vLLM...)",
-        "ollama_model": "Ollama model name",
-        "ollama_url": "Ollama URL",
-        "ollama_check_ok": "Ollama is reachable",
-        "ollama_check_fail": "Ollama not reachable",
-        "api_base": "API base URL",
-        "api_key": "API key",
-        "model_name": "Model name",
-        "api_check_ok": "API key works",
-        "api_check_fail": "Could not verify key — saved anyway",
-        "no_api_key": "No API key entered — cloud calls will fail until you set OPENAI_API_KEY",
-        "model_ok": "Model",
-        "agent_name": "Agent name (shown to users)",
-        "agent_lang": "Which language should the agent answer in?",
-        "lang_auto": "Same as the user's message (auto)",
-        "lang_ar": "Arabic — always answers in Arabic",
-        "lang_en": "English — always answers in English",
-        "agent_personality": "Personality / instructions (one line)",
-        "personality_default": "a professional, concise enterprise assistant",
-        "identity_ok": "Identity",
-        "gen_keys": "Generate secure random API keys for you?",
-        "keys_generated": "Keys generated (shown at the end — save them)",
-        "admin_key": "Admin key (full access)",
-        "user_key": "User key (chat only)",
-        "enable_whatsapp": "Enable the WhatsApp channel? (QR login)",
-        "wa_warn": "QR login uses the UNOFFICIAL WhatsApp Web protocol — use a dedicated number.",
-        "wa_prefix": "Reply only to messages starting with a prefix? (empty = all)",
-        "wa_ignore_groups": "Ignore group chats?",
-        "wa_role_prompt": "Which role should WhatsApp users get?",
-        "wa_role_user": "user — chat & safe tools only (recommended)",
-        "wa_role_admin": "admin — everything including accounting queries (owner only)",
-        "wa_allowed": "Allowed WhatsApp numbers (international format, comma-separated; empty = everyone)",
-        "wa_allowed_example": "Example: 967712345678,8613800138000",
-        "wa_ok": "WhatsApp",
-        "enable_telegram": "Enable the Telegram channel? (bot token)",
-        "tg_create_hint": "Create a bot with @BotFather on Telegram to get a token.",
-        "tg_token": "Telegram bot token",
-        "tg_check_ok": "Bot token verified",
-        "tg_check_fail": "Could not verify token — saved anyway",
-        "tg_no_token": "No token entered — Telegram bridge will not start until you set TELEGRAM_BOT_TOKEN",
-        "tg_allowed": "Allowed Telegram users (IDs or @usernames, comma; empty = everyone)",
-        "tg_ok": "Telegram",
-        "enable_accounting": "Connect the accounting database now?",
-        "acc_skip": "Skipped. Set ACCOUNTING_DB_URL in .env later.",
-        "acc_host": "Server (hostname or IP)",
-        "acc_port": "Port",
-        "acc_db": "Database name",
-        "acc_user": "DB user (read-only!)",
-        "acc_pass": "DB password",
-        "acc_server_ok": "Server reachable",
-        "acc_server_fail": "Cannot reach server — saved anyway; check network/firewall",
-        "acc_warn": "Adapt table names in connectors/accounting.py to your Onyx schema.",
-        "acc_ok": "Accounting connection string saved.",
-        "acc_db_type_prompt": "Choose the database type:",
-        "acc_db_sqlserver": "🟦 SQL Server — Onyx Pro, Microsoft ERPs",
-        "acc_db_oracle": "🟥 Oracle — Toad users, Oracle Database",
-        "acc_db_mysql": "🟩 MySQL — Web apps, CMS, e-commerce",
-        "acc_db_postgresql": "🟨 PostgreSQL — Modern web apps, analytics",
-        "acc_db_direct": "⬜ Direct URL — Any SQLAlchemy-compatible string",
-        "acc_service_name": "Service name (e.g. ORCL, XE)",
-        "acc_db_name": "Database name",
-        "acc_direct_url": "Full connection string",
-        "acc_display_name": "Display name (label)",
-        "acc_add_another": "Add another database?",
-        "acc_saved_multi": "Saved {} database(s) to config/accounting_schema.json",
-        "acc_db_number": "Database",
-        "acc_url_built": "Connection URL:",
-        "acc_discover_schema": "Auto-discover table schema?",
-        "perm_web": "Allow web search?",
-        "perm_calc": "Allow calculator?",
-        "perm_time": "Allow date/time?",
-        "perm_file": "Allow reading files?",
-        "perm_accounting": "Allow the agent to query accounting data?",
-        "perm_knowledge": "Use the knowledge base (company documents)?",
-        "perm_conversations": "Allow the agent to search past conversations?",
-        "perm_reports": "Allow creating & viewing reports?",
-        "perm_enabled": "Enabled",
-        "link_wa_now": "Link your WhatsApp number NOW? (QR will appear here)",
-        "link_wa_skip": "Skipped. The QR will appear on the first 'python start.py' run instead.",
-        "link_wa_no_node": "Node.js is not installed — cannot link WhatsApp here.",
-        "node_hint": "Install it from https://nodejs.org then run: python start.py",
-        "npm_install": "Installing WhatsApp bridge dependencies",
-        "npm_fail": "npm install failed. Run 'cd whatsapp && npm install' manually.",
-        "link_start": "Starting the bridge... the QR code will appear below.",
-        "link_phone_hint": "On your phone: WhatsApp → Linked devices → Link a device",
-        "link_wait": "Waiting up to 3 minutes for you to scan.",
-        "link_ok": "WhatsApp LINKED successfully! Session saved — no QR needed next time.",
-        "link_timeout": "Not linked yet (timeout or bridge stopped). No problem: run 'python start.py' and the QR will show again.",
-        "summary_title": "✅  SETUP COMPLETE",
-        "keys_warn": "🔑  YOUR API KEYS — SAVE THESE:",
-        "start_cmd": "🚀  START EVERYTHING WITH ONE COMMAND:",
-        "yes": "yes",
-        "no": "no",
-        "choose": "Choose",
-        "aborted": "Aborted — nothing was saved.",
-        "admin": "admin",
-        "user": "user",
+        "dev": "AbuSultancom",
+        "lang_choose": "Choose your language / اختر لغتك",
+        "go": "Press Enter to begin",
+        "skip_q": "Skip this step?",
+        "done": "✅ Done",
     },
 }
-
 L = STR[LANG]
 
 
-# ─── Pre-flight checks ────────────────────────────────────────────
-def preflight_check() -> None:
-    """Check Python, venv, deps, internet, Node.js before starting."""
-    global EXPRESS_MODE
-    checks_ok = True
+def t(k): return L.get(k, k)
 
-    # 1. Python version
-    if sys.version_info < (3, 11):
-        warn(f"Python ≥ 3.11 مطلوب (أنت تستخدم {sys.version_info[0]}.{sys.version_info[1]})")
-        warn(f"Python ≥ 3.11 required (you have {sys.version_info[0]}.{sys.version_info[1]})")
-        checks_ok = False
 
-    # 2. Virtual environment check
-    in_venv = (hasattr(sys, "real_prefix") or
-               (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
-    if not in_venv:
-        warn("🚩 البيئة الافتراضية غير مفعلة — يفضل: python -m venv venv && venv\\Scripts\\activate")
-        warn("🚩 Virtual environment not active — recommended: python -m venv venv && source venv/bin/activate")
+# ─── UI ───
+def hr(w=62): print(c("  " + "─" * w, "c", D))
 
-    # 3. Dependencies check
-    missing = []
-    for pkg in ["fastapi", "uvicorn", "httpx", "pydantic", "sqlalchemy"]:
-        try:
-            __import__(pkg)
-        except ImportError:
-            missing.append(pkg)
-    if missing:
-        warn(f"📦 بعض الاعتماديات مفقودة: {', '.join(missing)}")
-        warn(f"📦 Missing packages: {', '.join(missing)}")
-        if ask_yes("  تثبيتها الآن؟ / Install now?", True):
-            info("جاري التثبيت... (قد يستغرق دقيقة)")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
-                                   os.path.join(ROOT, "requirements.txt")],
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            ok("✅ تم تثبيت الاعتماديات")
 
-    # 4. Express mode
-    EXPRESS_MODE = ask_yes("⚡ وضع سريع؟ (قيم افتراضية للأسئلة المتكررة)", False)
-    if EXPRESS_MODE:
-        ok("تم اختيار الوضع السريع — استخدم القيم الافتراضية")
+def box_hdr(title, w=62):
+    tl = f"  {title}"
+    print(c(f"  ┌{'─'*w}┐", "c"))
+    print(c(f"  │{tl:<{w}}│", B, "c"))
+    print(c(f"  ├{'─'*w}┤", "c"))
 
-    # 5. Internet check
-    info("🔍 فحص الاتصال بالإنترنت...")
-    try:
-        socket.create_connection(("8.8.8.8", 53), timeout=3)
-        ok("✅ الإنترنت متصل")
-    except OSError:
-        warn("⚠️ الإنترنت غير متصل — اختبارات API السحابية ستفشل")
 
-    # 6. Node.js check
-    node = shutil.which("node") or shutil.which("node.exe")
-    npm = shutil.which("npm") or shutil.which("npm.exe")
-    if node:
-        ok(f"✅ Node.js: {node}")
-    else:
-        warn("⚠️ Node.js غير مثبت — واتساب لن يعمل")
-        warn("   ثبته من: https://nodejs.org")
-    if npm:
-        ok(f"✅ npm: {npm}")
-    else:
-        warn("⚠️ npm غير موجود")
+def box_row(line, w=62):
+    print(c(f"  │  {line}" + " " * (w - len(line) - 2) + "│", D))
 
+
+def box_end(w=62): print(c(f"  └{'─'*w}┘", "c"))
+
+
+def step_header(n):
+    clr()
     print()
-    if not checks_ok:
-        fail("❌ المتطلبات الأساسية غير مكتملة — راجع التحذيرات أعلاه")
-        sys.exit(1)
-    ok("✅ كل الفحوصات مكتملة")
+    print(c("  Enterprise AI Agent", B, "c"))
+    print(c(f"  ─{t('dev'):─^36}─", D))
+    print(c("  github.com/AbuSultancom  " + c("v0.5", D), D))
+    hr()
+    bar = c("█" * n + "░" * (TOTAL_STEPS - n), "g" if n > 3 else "y")
+    print(f"  {bar}  {c(str(n*100//TOTAL_STEPS)+'%', B)}  {c(f'[{n}/{TOTAL_STEPS}]', D)}")
+    hr()
     print()
 
 
-# ─── Skip / Express helpers ──────────────────────────────────────
-def maybe_skip(step_num: int, title: str) -> bool:
-    """In express mode, skip with defaults. Otherwise ask to skip."""
-    if EXPRESS_MODE:
-        return True
-    return not ask_yes(f"⏭️ تخطي خطوة \"{title}\"؟ / Skip \"{title}\"?", False)
+def ok(s): print(c(f"  ✅ {s}", "g"))
 
 
-# ─── UI helpers ───────────────────────────────────────────────────
-def box_top(width: int = 60) -> str:
-    return color("  ┌" + "─" * width + "┐", "cyan")
+def warn(s): print(c(f"  ⚠ {s}", "y"))
 
 
-def box_mid(width: int = 60) -> str:
-    return color("  ├" + "─" * width + "┤", "cyan")
+def info(s): print(c(f"  ℹ  {s}", D))
 
 
-def box_bot(width: int = 60) -> str:
-    return color("  └" + "─" * width + "┘", "cyan")
-
-
-def box_line(text: str, width: int = 60) -> str:
-    plain = ANSI_RE.sub("", text)
-    pad = width - len(plain)
-    return color("  │ ", "cyan") + text + " " * max(pad, 0) + color(" │", "cyan")
-
-
-def banner() -> None:
-    clear()
-    print(color(r"""
-    ╔══════════════════════════════════════════════╗
-    ║     ___                   _                ║
-    ║    | __|_ ___ __ _ _ __  (_)___ _ _  ___   ║
-    ║    | _|\ \ / '_ \ '_ \ | | / -_) ' \/ -_)  ║
-    ║    |___/_\_\ .__/ .__/_|_|_\___|_||_\___|  ║
-    ║            |_|  |_|                        ║
-    ╚══════════════════════════════════════════════╝
-    """, "cyan", "bold"))
-    print(color(f"   ╔══ {L['welcome_title']} ══╗", "bold"))
-    print()
-    for i, s in enumerate(L["steps"], 1):
-        print(color(f"     {i:>2}. {s}", "dim"))
-    print()
-    print(color(f"   {L['press_enter']}", "yellow"))
-    input(color("   ▶ ", "green", "bold"))
-    clear()
-
-
-def progress_bar(done: int) -> str:
-    filled = done * 20 // TOTAL_STEPS
-    pct = done * 100 // TOTAL_STEPS
-    bar = color("█" * filled, "green") + color("░" * (20 - filled), "dim")
-    step_text = f"{done}/{TOTAL_STEPS}" if done > 0 else "   "
-    return f"  {bar}  {color(str(pct) + '%', 'bold')}  {color(step_text, 'dim')}  "
-
-
-def section(num: int, subtitle: str = "") -> None:
-    print()
-    pbar = progress_bar(num - 1)
-    title = L["step_titles"][num - 1]
-    print(color("  ┌" + "─" * 62 + "┐", "cyan"))
-    print(pbar + color("│", "cyan") + color(f" {title} ", "bold") + color("│", "cyan"))
-    print(color("  ├" + "─" * 62 + "┤", "cyan"))
-    if subtitle:
-        print(color(f"  │ {subtitle}".ljust(66) + "│", "dim"))
-    print(color("  └" + "─" * 62 + "┘", "cyan"))
-    print()
-
-
-def ok(msg: str) -> None:
-    print(f"  {color('✔', 'green', 'bold')} {color(msg, 'green')}")
-
-
-def warn(msg: str) -> None:
-    print(f"  {color('⚠', 'yellow', 'bold')} {color(msg, 'yellow')}")
-
-
-def fail(msg: str) -> None:
-    print(f"  {color('✖', 'red', 'bold')} {color(msg, 'red')}")
-
-
-def info(msg: str) -> None:
-    print(f"  {color('·', 'cyan')} {color(msg, 'dim')}")
-
-
-# ─── Input helpers ────────────────────────────────────────────────
-def ask(prompt: str, default: str = "") -> str:
-    suffix = color(f" [{default}]", "dim") if default else ""
-    val = input(f"  {color('?', 'yellow')} {prompt}{suffix}: ").strip()
-    return val or default
-
-
-def ask_yes(prompt: str, default: bool = True) -> bool:
-    hint = color("[Y/n]", "dim") if default else color("[y/N]", "dim")
-    val = input(f"  {color('?', 'yellow')} {prompt} {hint}: ").strip().lower()
-    if not val:
-        return default
-    return val in ("y", "yes", "1", "true", "نعم", "yup", "yeah")
-
-
-def ask_choice(prompt: str, choices: list[str], default: int = 0) -> int:
-    print(f"  {color('?', 'yellow')} {prompt}")
-    for i, c in enumerate(choices, 1):
-        if i - 1 == default:
-            print(f"    {color('●', 'green')} {color(str(i) + ')', 'green', 'bold')} {c}")
-        else:
-            print(f"    {color('○', 'dim')} {i}) {color(c, 'dim')}")
-    while True:
-        val = input(f"    {color('›', 'cyan')} {L['choose']} [{default + 1}]: ").strip()
-        if not val:
-            return default
-        if val.isdigit() and 1 <= int(val) <= len(choices):
-            return int(val) - 1
-        fail("❌")
-
-
-# ─── Spinner ──────────────────────────────────────────────────────
+# ─── Spinner ───
 class Spinner:
-    def __init__(self, text: str):
-        self.text = text
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, daemon=True)
+    _f = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
-    def _run(self):
-        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-        i = 0
-        while not self._stop.is_set():
-            sys.stdout.write(f"\r  {color(frames[i % len(frames)], 'cyan')} {self.text}...")
-            sys.stdout.flush()
-            i += 1
-            time.sleep(0.08)
+    def __init__(self, msg): self.m = msg; self.s = False
 
     def __enter__(self):
-        self._thread.start()
+        import threading
+        self._t = threading.Thread(target=self._r, daemon=True); self._t.start()
         return self
 
-    def __exit__(self, *args):
-        self._stop.set()
-        self._thread.join()
-        sys.stdout.write("\r" + " " * (len(self.text) + 14) + "\r")
-        sys.stdout.flush()
+    def __exit__(self, *a):
+        self.s = True
+        if self._t: self._t.join(0.3)
+        sys.stdout.write("\r" + " " * 60 + "\r"); sys.stdout.flush()
+
+    def _r(self):
+        i = 0
+        while not self.s:
+            sys.stdout.write(f"\r    {self._f[i]} {self.m}... "); sys.stdout.flush()
+            i = (i + 1) % len(self._f); time.sleep(0.1)
 
 
-# ─── Network tests ────────────────────────────────────────────────
-def test_http(url: str, headers: dict | None = None, timeout: int = 8) -> tuple[bool, str]:
+def test_tcp(host, port, t=3):
     try:
-        req = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return True, f"HTTP {r.status}"
+        s = socket.create_connection((host, port), t); s.close(); return True, ""
     except Exception as e:
-        return False, str(e)[:60]
+        return False, str(e)
 
 
-def test_tcp(host: str, port: int, timeout: int = 5) -> tuple[bool, str]:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True, "reachable"
-    except Exception as e:
-        return False, str(e)[:60]
+# ═══════════════════════════════════════════════════════════════════
+# LANGUAGE SELECTION
+# ═══════════════════════════════════════════════════════════════════
+def choose_language():
+    global LANG, L
+    print(c("  Enterprise AI Agent", B, "c"))
+    print(c("  ── by AbuSultancom ──", D))
+    print()
+    print("  1)  العربية")
+    print("  2)  English")
+    print()
+    v = input("  ▶  اختر / Choose [1]: ").strip()
+    if v == "2": LANG = "en"
+    else: LANG = "ar"
+    L = STR[LANG]
+    clr()
 
 
-def npm_cmd() -> str | None:
-    for name in ("npm", "npm.cmd", "npm.exe"):
-        p = shutil.which(name)
-        if p:
-            return p
-    return None
-
-
-def node_cmd() -> str | None:
-    return shutil.which("node") or shutil.which("node.exe")
-
-
-# ─── Steps ────────────────────────────────────────────────────────
-def step_model(env: dict, settings: dict) -> None:
-    section(1, L["steps"][0])
-    choice = ask_choice(L["model_prompt"], [
-        L["model_ollama"],
-        L["model_deepseek"],
-        L["model_openai"],
-        L["model_other"],
-    ])
-    if choice == 0:
-        env["DEFAULT_MODEL"] = "ollama:" + ask(L["ollama_model"], "qwen2.5:7b")
-        env["OLLAMA_BASE_URL"] = ask(L["ollama_url"], "http://localhost:11434")
-        with Spinner(L["ollama_check_ok"]):
-            good, info = test_http(env["OLLAMA_BASE_URL"].rstrip("/") + "/api/tags")
-        if good:
-            ok(f"{L['ollama_check_ok']} ({info})")
-        else:
-            warn(f"{L['ollama_check_fail']} ({info})")
-    else:
-        presets = {1: ("https://api.deepseek.com/v1", "deepseek-chat"),
-                    2: ("https://api.openai.com/v1", "gpt-4o-mini"),
-                    3: ("", "")}
-        base, model = presets[choice]
-        env["OPENAI_BASE_URL"] = ask(L["api_base"], base)
-        env["OPENAI_API_KEY"] = ask(L["api_key"])
-        env["DEFAULT_MODEL"] = "openai:" + ask(L["model_name"], model)
-        if env["OPENAI_API_KEY"]:
-            with Spinner(L["api_check_ok"]):
-                good, info = test_http(
-                    env["OPENAI_BASE_URL"].rstrip("/") + "/models",
-                    {"Authorization": f"Bearer {env['OPENAI_API_KEY']}"})
-            if good:
-                ok(f"{L['api_check_ok']} ({info})")
-            else:
-                warn(L["api_check_fail"])
-        else:
-            warn(L["no_api_key"])
-    settings["llm"] = {"default_model": env["DEFAULT_MODEL"]}
-    ok(f"{L['model_ok']}: {env['DEFAULT_MODEL']}")
-
-
-def step_identity(env: dict, settings: dict) -> None:
-    section(2, L["steps"][1])
-    name = ask(L["agent_name"], "Enterprise AI Agent")
-    lang_idx = ask_choice(L["agent_lang"], [
-        L["lang_auto"], L["lang_ar"], L["lang_en"],
-    ])
-    lang = ["auto", "ar", "en"][lang_idx]
-    personality = ask(L["agent_personality"], L["personality_default"])
-    settings["agent"] = {"name": name, "language": lang, "personality": personality}
-    ok(f"{L['identity_ok']}: {name} · {lang}")
-
-
-def step_security(env: dict, settings: dict) -> None:
-    section(3, L["steps"][2])
-    if ask_yes(L["gen_keys"], True):
-        env["ADMIN_KEY"] = secrets.token_urlsafe(24)
-        env["USER_KEY"] = secrets.token_urlsafe(24)
-        ok(L["keys_generated"])
-    else:
-        env["ADMIN_KEY"] = ask(L["admin_key"], "dev-admin-key")
-        env["USER_KEY"] = ask(L["user_key"], "dev-user-key")
-    settings["security"] = {"note": "admin = full access, user = chat + read only"}
-
-
-def step_channels(env: dict, settings: dict) -> None:
-    section(4, L["steps"][3])
-    settings["channels"] = {}
-
-    # WhatsApp
-    if EXPRESS_MODE:
-        wa_on = False
-    else:
-        wa_on = ask_yes(L["enable_whatsapp"], True)
-    env["WHATSAPP_ENABLED"] = "true" if wa_on else "false"
-    if wa_on:
-        warn(L["wa_warn"])
-        env["BOT_PREFIX"] = ask(L["wa_prefix"], "")
-        env["IGNORE_GROUPS"] = "true" if ask_yes(L["wa_ignore_groups"], True) else "false"
-        role_choice = ask_choice(L["wa_role_prompt"], [
-            L["wa_role_user"],
-            L["wa_role_admin"],
-        ])
-        env["WHATSAPP_ROLE"] = "user" if role_choice == 0 else "admin"
-        settings["channels"]["whatsapp"] = {
-            "role": env["WHATSAPP_ROLE"],
-        }
-        ok(f"{L['wa_ok']}: prefix '{env['BOT_PREFIX'] or '(all)'}' · role {env['WHATSAPP_ROLE']}")
-    else:
-        settings["channels"]["whatsapp"] = {"enabled": False}
+# ═══════════════════════════════════════════════════════════════════
+# STEP 1 — MODEL PROVIDER
+# ═══════════════════════════════════════════════════════════════════
+def step_model(env, st):
+    step_header(1)
+    box_hdr("📍 مزود الذكاء / AI Provider")
+    box_row("")
+    box_row(c("اختر المزود الذي سيشغل الوكيل:", B))
+    box_row("")
+    box_end()
 
     print()
+    m = ch("أي مزود تريد؟ / Which provider?", [
+        "Ollama — محلي، مجاني، خصوصي / Local, free, private",
+        "DeepSeek — سحاب، رخيص وقوي / Cloud, cheap & powerful",
+        "OpenAI — سحاب (GPT-4o) / Cloud",
+        "مخصص — أي رابط متوافق مع OpenAI / Custom endpoint",
+    ], 0)
 
-    # Telegram
-    tg_on = ask_yes(L["enable_telegram"], False)
-    env["TELEGRAM_ENABLED"] = "true" if tg_on else "false"
-    if tg_on:
-        info(L["tg_create_hint"])
-        env["TELEGRAM_BOT_TOKEN"] = ask(L["tg_token"], "")
-        if env["TELEGRAM_BOT_TOKEN"]:
-            with Spinner(L["tg_check_ok"]):
-                good, info2 = test_http(
-                    f"https://api.telegram.org/bot{env['TELEGRAM_BOT_TOKEN']}/getMe")
-            if good:
-                ok(L["tg_check_ok"])
-            else:
-                warn(f"{L['tg_check_fail']} ({info2})")
-        else:
-            warn(L["tg_no_token"])
-        tg_allowed = ask(L["tg_allowed"], "")
-        env["TELEGRAM_ALLOWED"] = ",".join(x.strip() for x in tg_allowed.split(",") if x.strip())
-        settings["channels"]["telegram"] = {"enabled": True, "allowed": env["TELEGRAM_ALLOWED"]}
-        token_status = "set" if env.get("TELEGRAM_BOT_TOKEN") else "MISSING"
-        ok(f"{L['tg_ok']}: token {token_status}")
+    if m == 0:
+        env["DEFAULT_MODEL"] = f"ollama:{ask('اسم الموديل / Model name', 'llama3')}"
+        env["OLLAMA_BASE_URL"] = ask("رابط Ollama / URL", "http://localhost:11434/v1")
+    elif m == 1:
+        env["DEFAULT_MODEL"] = f"openai:{ask('اسم الموديل / Model', 'deepseek-chat')}"
+        env["OPENAI_API_KEY"] = ask("مفتاح API / API Key", "")
+        env["OPENAI_BASE_URL"] = "https://api.deepseek.com/v1"
+    elif m == 2:
+        env["DEFAULT_MODEL"] = f"openai:{ask('اسم الموديل / Model', 'gpt-4o')}"
+        env["OPENAI_API_KEY"] = ask("مفتاح API / API Key", "")
+        env["OPENAI_BASE_URL"] = ask("رابط API / URL", "https://api.openai.com/v1")
     else:
-        settings["channels"]["telegram"] = {"enabled": False}
+        name = ask("اسم المزود / Provider name", "custom")
+        env["DEFAULT_MODEL"] = f"openai:{ask('اسم الموديل / Model', 'gpt-4o')}"
+        env["OPENAI_API_KEY"] = ask("مفتاح API / API Key", "")
+        env["OPENAI_BASE_URL"] = ask("رابط API الأساسي / Base URL", "")
+
+    ok(f"تم: {env['DEFAULT_MODEL']}")
+
+    # Test API key
+    if env.get("OPENAI_API_KEY"):
+        with Spinner("اختبار المفتاح / Testing API key"):
+            try:
+                req = urllib.request.Request(
+                    f"{env.get('OPENAI_BASE_URL', 'https://api.deepseek.com/v1')}/models",
+                    headers={"Authorization": f"Bearer {env['OPENAI_API_KEY']}"})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    ok("API key يعمل / works ✅")
+            except:
+                warn("تعذر التحقق — تم الحفظ / Saved anyway")
 
 
-# ─── Database Help Box ────────────────────────────────────────────
-def _db_help_box() -> None:
-    """Show a helpful database connection guide before asking for details."""
-    w = 64
-    print(box_top(w))
-    print(box_line(color("  DATABASE CONNECTION GUIDE  |  دليل ربط قاعدة البيانات", "bold", "yellow"), w))
-    print(box_mid(w))
-    print(box_line(color("  🟦 SQL Server   ", "cyan", "bold") + "— Onyx Pro, Microsoft ERP systems", w))
-    print(box_line("     Find connection in SSMS > Server Properties > Connection", w))
-    print(box_line(color("  🟥 Oracle       ", "red", "bold") + "— Oracle DB / Toad users", w))
-    print(box_line("     Toad > Session > New Connection > Direct tab", w))
-    print(box_line("     OR check tnsnames.ora at C:\\app\\oracle\\product\\...\\Network\\Admin", w))
-    print(box_line(color("  🟩 MySQL        ", "green", "bold") + "— Web apps, CMS, e-commerce", w))
-    print(box_line("     Find connection in app config file or .env", w))
-    print(box_line(color("  🟨 PostgreSQL   ", "yellow", "bold") + "— Modern web apps, analytics", w))
-    print(box_line("     Find connection in app config file or .env", w))
-    print(box_line(color("  ⬜ Direct URL   ", "dim") + "— Any SQLAlchemy-compatible connection", w))
-    print(box_line("     Paste the full connection string directly", w))
-    print(box_bot(w))
+# ═══════════════════════════════════════════════════════════════════
+# STEP 2 — AGENT IDENTITY
+# ═══════════════════════════════════════════════════════════════════
+def step_identity(env, st):
+    step_header(2)
+    box_hdr("👤 هوية الوكيل / Agent Identity")
+    box_end()
+    print()
+    st.setdefault("agent", {})
+    st["agent"]["name"] = ask("اسم الوكيل / Agent name", "المساعد الذكي")
+    lang = ch("لغة الردود / Response language", [
+        "نفس لغة المستخدم — تلقائي / Auto",
+        "العربية — يرد بالعربية دائماً / Always Arabic",
+        "English — always English",
+    ], 0)
+    st["agent"]["language"] = ["auto", "ar", "en"][lang]
+    st["agent"]["personality"] = ask("الشخصية / Personality", "مساعد مؤسسي محترف ومختصر")
+    ok(f"تم: {st['agent']['name']}")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# STEP 3 — SECURITY
+# ═══════════════════════════════════════════════════════════════════
+def step_security(env, st):
+    step_header(3)
+    box_hdr("🔒 الأمان / Security")
+    box_end()
+    print()
+    env["ADMIN_KEY"] = secrets.token_hex(16)
+    env["USER_KEY"] = secrets.token_hex(16)
+    ok("تم إنشاء مفاتيح API")
+    print(f"  مشرف / Admin: {c(env['ADMIN_KEY'], 'g', B)}")
+    print(f"  مستخدم / User:  {c(env['USER_KEY'], 'g', B)}")
+    print(c("  ⚠ احفظها — لن تظهر مرة أخرى!", "y", B))
+    input(c("\n  ▶ اضغط Enter للمتابعة", D))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# STEP 4 — CHANNELS
+# ═══════════════════════════════════════════════════════════════════
+def step_channels(env, st):
+    step_header(4)
+    st["channels"] = {}
+
+    box_hdr("📱 واتساب / WhatsApp")
+    box_end()
+    print()
+    if yn("تفعيل واتساب؟ / Enable WhatsApp?", True):
+        env["WHATSAPP_ENABLED"] = "true"
+        env["BOT_PREFIX"] = ask("بادئة الرسائل (فارغ = الكل) / Prefix (empty=all)", "")
+        env["IGNORE_GROUPS"] = "true" if yn("تجاهل المجموعات؟ / Ignore groups?", True) else "false"
+        r = ch("صلاحية مستخدمي واتساب؟ / WhatsApp role?", [
+            "user — محادثة وأدوات آمنة / Chat + safe tools",
+            "admin — صلاحية كاملة / Full access",
+        ], 0)
+        env["WHATSAPP_ROLE"] = "user" if r == 0 else "admin"
+        st["channels"]["whatsapp"] = {"role": env["WHATSAPP_ROLE"]}
+        ok(f"واتساب: مفعل — بادئة '{env['BOT_PREFIX'] or '(بدون)'}'")
+    else:
+        env["WHATSAPP_ENABLED"] = "false"
+        st["channels"]["whatsapp"] = {"enabled": False}
+        warn("واتساب: معطل")
+
+    print()
+    box_hdr("💬 تلغرام / Telegram")
+    box_end()
+    print()
+    if yn("تفعيل تلغرام؟ / Enable Telegram?", False):
+        env["TELEGRAM_ENABLED"] = "true"
+        env["TELEGRAM_BOT_TOKEN"] = ask("Token البوت / Bot Token", "")
+        st["channels"]["telegram"] = {"enabled": True}
+        ok("تلغرام: مفعل")
+    else:
+        env["TELEGRAM_ENABLED"] = "false"
+        st["channels"]["telegram"] = {"enabled": False}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# STEP 5 — DATABASE (⭐ THE STAR)
+# ═══════════════════════════════════════════════════════════════════
+def step_accounting(env, st):
+    step_header(5)
+
+    # Help guide
+    box_hdr("📘 دليل ربط قواعد البيانات / Database Guide", 64)
+    box_row(c("🟦 SQL Server  — أونكس برو، Microsoft ERP", "c"), 64)
+    box_row("   تجد البيانات في: SSMS > Server Properties", 64)
+    box_row(c("🟥 Oracle      — Toad, SQL Developer", "r"), 64)
+    box_row("   Toad > Session > New Connection > Direct", 64)
+    box_row("   أو ملف: C:\\app\\oracle\\...\\Network\\Admin\\tnsnames.ora", 64)
+    box_row(c("🟩 MySQL       — تطبيقات ويب، CMS", "g"), 64)
+    box_row("   إعدادات التطبيق أو ملف .env", 64)
+    box_row(c("🟨 PostgreSQL  — تطبيقات حديثة", "y"), 64)
+    box_row("   إعدادات التطبيق أو ملف .env", 64)
+    box_row(c("⬜ رابط مباشر  — أي قاعدة SQLAlchemy", D), 64)
+    box_end(64)
     print()
 
+    st.setdefault("accounting", {"enabled": False, "read_only": True})
 
-def step_accounting(env: dict, settings: dict) -> None:
-    section(5, L["steps"][4])
+    if not yn("تفعيل ربط قاعدة البيانات؟ / Enable database connection?", True):
+        warn("تم التخطي — أضف لاحقاً من الوكيل: أضف قاعدة بيانات")
+        return
 
-    # Always show database config (don't allow skip)
-    enabled = ask_yes(L["enable_accounting"], True)
-    settings["accounting"] = {"enabled": enabled, "read_only": True}
-
-    # ── Show the help box ──
-    _db_help_box()
-
-    db_configs: list[dict] = []
-    db_idx = 1
-    type_map = {0: "mssql", 1: "oracle", 2: "mysql", 3: "postgresql", 4: "direct"}
+    st["accounting"]["enabled"] = True
+    dbs = []
+    n = 1
 
     while True:
-        if db_idx > 1:
-            print()
-            info(f"📦 {L.get('acc_db_number', 'Database')} #{db_idx}")
-
-        # ── Step 1: Choose database type FIRST ──
-        db_type = ask_choice(L["acc_db_type_prompt"], [
-            L["acc_db_sqlserver"],
-            L["acc_db_oracle"],
-            L["acc_db_mysql"],
-            L["acc_db_postgresql"],
-            L["acc_db_direct"],
-        ])
-
-        # ── Step 2: Collect type-specific fields ──
-        if db_type == 0:  # SQL Server
-            info(color("  • SQL Server: host, port (default 1433), database, user, password", "dim"))
-            host = ask(L["acc_host"], "localhost")
-            port = _ask_port(L["acc_port"], "1433")
-            db_name = ask(L["acc_db"], "OnyxDB")
-            user = ask(L["acc_user"], "ai_agent_reader")
-            password = ask(L["acc_pass"])
-            db_url = (
-                f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db_name}"
-                "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
-            )
-            display_default = db_name
-
-        elif db_type == 1:  # Oracle
-            info(color("  • Oracle: host, port (default 1521), service_name, user, password", "dim"))
-            host = ask(L["acc_host"], "localhost")
-            port = _ask_port(L["acc_port"], "1521")
-            service_name = ask(L["acc_service_name"], "ORCL")
-            user = ask(L["acc_user"], "ai_agent_reader")
-            password = ask(L["acc_pass"])
-            db_url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service_name}"
-            display_default = service_name
-
-        elif db_type == 2:  # MySQL
-            info(color("  • MySQL: host, port (default 3306), database, user, password", "dim"))
-            host = ask(L["acc_host"], "localhost")
-            port = _ask_port(L["acc_port"], "3306")
-            db_name = ask(L["acc_db_name"], "mydb")
-            user = ask(L["acc_user"], "ai_agent_reader")
-            password = ask(L["acc_pass"])
-            db_url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
-            display_default = db_name
-
-        elif db_type == 3:  # PostgreSQL
-            info(color("  • PostgreSQL: host, port (default 5432), database, user, password", "dim"))
-            host = ask(L["acc_host"], "localhost")
-            port = _ask_port(L["acc_port"], "5432")
-            db_name = ask(L["acc_db_name"], "mydb")
-            user = ask(L["acc_user"], "ai_agent_reader")
-            password = ask(L["acc_pass"])
-            db_url = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-            display_default = db_name
-
-        else:  # db_type == 4: Direct URL
-            info(color("  • Direct URL: paste the full SQLAlchemy connection string", "dim"))
-            host, port, user, password = "localhost", 0, "", ""
-            db_url = ask(L["acc_direct_url"], "sqlite:///accounting.db")
-            display_default = "Direct Connection"
-
-        # ── Step 3: TCP reachability test (skip for Direct URL) ──
-        if db_type != 4:
-            with Spinner(f"Testing {host}:{port}"):
-                reachable, info2 = test_tcp(host, port)
-            if reachable:
-                ok(f"{L['acc_server_ok']} at {host}:{port}")
-            else:
-                warn(f"{L['acc_server_fail']} ({info2})")
-
-        # ── Step 4: Show the built URL (mask password) ──
-        if db_type != 4:
-            masked = _mask_password(db_url, password) if password else db_url
-            info(f"{L.get('acc_url_built', 'URL:')} {color(masked, 'dim')}")
-
-        # ── Step 5: Display name ──
-        display_name = ask(L["acc_display_name"], display_default)
-        db_key = display_name.lower().replace(" ", "_").replace("-", "_")
-
-        db_configs.append({
-            "key": db_key,
-            "name": display_name,
-            "db_url": db_url,
-            "type": type_map[db_type],
-        })
-        ok(f"✅ {display_name} ({db_key})")
-
-        # Store first DB URL in ACCOUNTING_DB_URL for backward compat
-        if db_idx == 1:
-            env["ACCOUNTING_DB_URL"] = db_url
-
         print()
-        if not ask_yes(L["acc_add_another"], False):
-            break
-        db_idx += 1
+        hr()
+        print(c(f"  📦 قاعدة بيانات #{n} / Database #{n}", B))
+        hr()
+        print()
 
-    # ── Save config ──
-    settings["accounting"]["allowed_queries"] = [
-        "sales_summary", "revenue_by_month", "top_customers",
-        "expenses_summary", "invoice_lookup", "cash_balance",
-        "vendor_balances", "sales_by_item",
-    ]
+        tpe = ch("نوع القاعدة / Database type:", [
+            "🟦 SQL Server — MSSQL",
+            "🟥 Oracle — Oracle DB",
+            "🟩 MySQL",
+            "🟨 PostgreSQL",
+            "⬜ رابط مباشر / Direct URL",
+        ], 0)
 
-    if db_configs:
-        _save_accounting_schema(db_configs)
-        ok(L["acc_saved_multi"].format(len(db_configs)))
-
-    # ── Optional: schema discovery ──
-    for cfg in db_configs:
-        if ask_yes(L["acc_discover_schema"].replace("?", f" for {cfg['name']}?"), False):
-            with Spinner(f"Discovering schema for {cfg['name']}..."):
-                try:
-                    from connectors.accounting import discover_schema, _load_multi_db_config
-                    discovered = discover_schema(cfg["db_url"])
-                    discovered.name = cfg["name"]
-                    discovered.db_url = cfg["db_url"]
-                    dbs = _load_multi_db_config()
-                    dbs[cfg["key"]] = discovered
-                    from connectors.accounting import _save_multi_db_config as _save
-                    _save(dbs)
-                    found = len(discovered.tables)
-                    if found > 0:
-                        ok(f"{cfg['name']}: {found} table(s) discovered")
-                        for k, v in discovered.tables.items():
-                            info(f"  {v['table']} → {k}")
-                    else:
-                        warn(f"{cfg['name']}: no tables found — using defaults")
-                except ImportError:
-                    warn("SQLAlchemy not installed — using default schema")
-                except Exception as e:
-                    warn(f"Discovery failed: {e}")
+        if tpe == 4:  # Direct URL
+            url = ask("Connection string")
+            key = ask("مفتاح مختصر (إنجليزي) / Key", f"db{n}")
+            name = ask("اسم العرض / Display name", f"Database {n}")
         else:
-            info(f"{cfg['name']}: using default Onyx Pro schema")
+            host = ask("Host / الخادم", "localhost")
+            ports = ["1433", "1521", "3306", "5432"]
+            port = ask("Port / المنفذ", ports[tpe])
+            user = ask("User / المستخدم", "")
+            pwd = ask("Password / كلمة المرور", "")
 
-    ok(L["acc_ok"])
+            with Spinner(f"اختبار {host}:{port}"):
+                ok_, err = test_tcp(host, int(port))
+            if ok_: ok("الخادم متصل ✅")
+            else: warn(f"تعذر الوصول: {err}")
 
+            if tpe == 0:  # SQL Server
+                db = ask("Database name", "")
+                url = f"mssql+pyodbc://{user}:{pwd}@{host}:{port}/{db}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+                key = db.lower().replace(" ", "_") if db else f"db{n}"
+                name = ask("اسم العرض / Display name", db or f"DB {n}")
 
-# ─── Accounting helpers ────────────────────────────────────────────
-def _ask_port(prompt: str, default: str) -> int:
-    """Ask for a port number, retrying until valid."""
-    while True:
-        raw = ask(prompt, default)
-        if raw.isdigit():
-            return int(raw)
-        fail("❌")
+            elif tpe == 1:  # Oracle ⭐
+                svc = ask("🔧 Service Name (مثلاً ORCL, XE)", "ORCL")
+                url = f"oracle+oracledb://{user}:{pwd}@{host}:{port}/?service_name={svc}"
+                key = svc.lower()
+                name = ask("اسم العرض / Display name", f"Oracle {svc}")
 
+            elif tpe == 2:  # MySQL
+                db = ask("Database name", "")
+                url = f"mysql+pymysql://{user}:{pwd}@{host}:{port}/{db}"
+                key = db.lower().replace(" ", "_") if db else f"db{n}"
+                name = ask("اسم العرض / Display name", db or f"DB {n}")
 
-def _mask_password(url: str, password: str) -> str:
-    """Replace the password in a connection URL with ****."""
-    return url.replace(f":{password}@", ":****@")
+            else:  # PostgreSQL
+                db = ask("Database name", "")
+                url = f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
+                key = db.lower().replace(" ", "_") if db else f"db{n}"
+                name = ask("اسم العرض / Display name", db or f"DB {n}")
 
+        dbs.append({"key": key, "name": name, "db_url": url, "enabled": True, "tables": {}})
+        ok(f"تمت إضافة: {name} ✅")
+        print()
 
-def _save_accounting_schema(db_configs: list[dict]) -> None:
-    """Save database configs to config/accounting_schema.json."""
-    try:
-        from connectors.accounting import SchemaConfig, _save_multi_db_config
-        databases = {}
-        for cfg in db_configs:
-            databases[cfg["key"]] = SchemaConfig(
-                version=1,
-                name=cfg["name"],
-                db_url=cfg["db_url"],
-                enabled=True,
-            )
-        _save_multi_db_config(databases)
-    except ImportError:
-        # Fallback: write JSON directly
-        import json as _json
-        config_dir = os.path.join(ROOT, "config")
-        os.makedirs(config_dir, exist_ok=True)
-        schema_path = os.path.join(config_dir, "accounting_schema.json")
-        db_dict = {}
-        for cfg in db_configs:
-            db_dict[cfg["key"]] = {
-                "version": 1,
-                "name": cfg["name"],
-                "db_url": cfg["db_url"],
-                "enabled": True,
-                "tables": {},
-            }
-        config = {"version": 2, "databases": db_dict}
-        with open(schema_path, "w", encoding="utf-8") as f:
-            _json.dump(config, f, indent=2, ensure_ascii=False)
+        if not yn("➕ إضافة قاعدة أخرى؟ / Add another?", False):
+            break
+        n += 1
 
-
-def step_permissions(env: dict, settings: dict) -> None:
-    section(6, L["steps"][5])
-    perms = {}
-    perms["web_search"] = ask_yes(L["perm_web"], True)
-    perms["calculator"] = ask_yes(L["perm_calc"], True)
-    perms["get_current_time"] = ask_yes(L["perm_time"], True)
-    perms["read_file"] = ask_yes(L["perm_file"], False)
-    perms["search_conversations"] = ask_yes(L["perm_conversations"], True)
-    perms["generate_report"] = ask_yes(L["perm_reports"], True)
-    perms["list_reports"] = perms["generate_report"]
-    accounting_on = settings.get("accounting", {}).get("enabled", False)
-    if accounting_on:
-        perms["accounting_tools"] = ask_yes(L["perm_accounting"], True)
-    else:
-        perms["accounting_tools"] = False
-    perms["knowledge_rag"] = ask_yes(L["perm_knowledge"], True)
-    settings["permissions"] = perms
-    enabled = [k for k, v in perms.items() if v]
-    ok(f"{L['perm_enabled']}: {', '.join(enabled)}")
+    # Save
+    cfg = {"version": 2, "databases": {}}
+    for d in dbs:
+        cfg["databases"][d["key"]] = {"name": d["name"], "db_url": d["db_url"],
+                                       "enabled": d["enabled"], "tables": d["tables"]}
+    os.makedirs(os.path.join(ROOT, "config"), exist_ok=True)
+    with open(os.path.join(ROOT, "config", "accounting_schema.json"), "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    if dbs:
+        env["ACCOUNTING_DB_URL"] = dbs[0]["db_url"]
+    ok(f"تم حفظ {len(dbs)} قاعدة بيانات")
 
 
-def step_finish(env: dict, settings: dict) -> None:
-    section(7, L["steps"][6])
-    _write_files(env, settings)
-    _print_summary(env, settings)
-    # Link WhatsApp if enabled
-    if env.get("WHATSAPP_ENABLED") == "true":
-        _link_whatsapp(env, settings)
-    else:
-        warn("WhatsApp disabled — skipping.")
+# ═══════════════════════════════════════════════════════════════════
+# STEP 6 — PERMISSIONS
+# ═══════════════════════════════════════════════════════════════════
+def step_permissions(env, st):
+    step_header(6)
+    box_hdr("🛠️ صلاحيات الأدوات / Tool Permissions")
+    box_row("")
+    box_row(c("اختر الأدوات المسموح للوكيل استخدامها:", B))
+    box_row("")
+    box_end()
+    print()
+    st["permissions"] = {}
+    tools_list = [
+        ("web_search", "بحث ويب / Web search"),
+        ("get_weather", "الطقس / Weather"),
+        ("get_currency_rate", "أسعار العملات / Currency rates"),
+        ("calculator", "آلة حاسبة / Calculator"),
+        ("read_image", "قراءة الصور / Vision"),
+        ("generate_report", "إنشاء تقارير / Reports"),
+        ("tasi_stocks", "أسهم سعودية / Saudi stocks"),
+        ("vat_calc", "الضريبة / VAT"),
+        ("zakat_calc", "الزكاة / Zakat"),
+        ("search_employee_tool", "دليل الموظفين / Employee directory"),
+        ("compare_branches", "مقارنة الفروع / Branches"),
+    ]
+    for key, desc in tools_list:
+        st["permissions"][key] = yn(f"  تفعيل: {desc}?", True)
+
+    # Accounting tools
+    ac = yn("تفعيل أدوات المحاسبة كلها؟ / Enable all accounting tools?", True)
+    for t in ["diagnose_connection", "discover_schema_tool", "show_schema_config",
+              "get_vendor_balances", "get_sales_by_item"]:
+        st["permissions"][t] = ac
+    ok("تم حفظ الصلاحيات")
 
 
-# ─── File output ──────────────────────────────────────────────────
-def _write_files(env: dict, settings: dict) -> None:
-    env_lines = [
-        "# Generated by setup.py — edit anytime then restart the app",
-        f"ADMIN_KEY={env.get('ADMIN_KEY', 'dev-admin-key')}",
-        f"USER_KEY={env.get('USER_KEY', 'dev-user-key')}",
-        f"DEFAULT_MODEL={env.get('DEFAULT_MODEL', 'ollama:qwen2.5:7b')}",
-        f"OLLAMA_BASE_URL={env.get('OLLAMA_BASE_URL', 'http://localhost:11434')}",
-        f"OPENAI_BASE_URL={env.get('OPENAI_BASE_URL', '')}",
+# ═══════════════════════════════════════════════════════════════════
+# STEP 7 — FINISH
+# ═══════════════════════════════════════════════════════════════════
+def step_finish(env, st):
+    step_header(7)
+
+    # Write .env
+    lines = [
+        f"DEFAULT_MODEL={env.get('DEFAULT_MODEL', '')}",
         f"OPENAI_API_KEY={env.get('OPENAI_API_KEY', '')}",
-        f"ACCOUNTING_DB_URL={env.get('ACCOUNTING_DB_URL', '')}",
-        f"WHATSAPP_ENABLED={env.get('WHATSAPP_ENABLED', 'true')}",
+        f"OPENAI_BASE_URL={env.get('OPENAI_BASE_URL', '')}",
+        f"OLLAMA_BASE_URL={env.get('OLLAMA_BASE_URL', '')}",
+        f"WHATSAPP_ENABLED={env.get('WHATSAPP_ENABLED', 'false')}",
         f"BOT_PREFIX={env.get('BOT_PREFIX', '')}",
         f"IGNORE_GROUPS={env.get('IGNORE_GROUPS', 'true')}",
         f"WHATSAPP_ROLE={env.get('WHATSAPP_ROLE', 'user')}",
-        f"ALLOWED_NUMBERS={env.get('ALLOWED_NUMBERS', '')}",
-        f"ADMIN_NUMBERS={env.get('ADMIN_NUMBERS', '')}",
-        f"CHAT_MEMORY={env.get('CHAT_MEMORY', '20')}",
-        f"REPORT_ENABLED={env.get('REPORT_ENABLED', 'false')}",
-        f"REPORT_TIME={env.get('REPORT_TIME', '08:00')}",
-        f"REPORT_TO={env.get('REPORT_TO', '')}",
         f"TELEGRAM_ENABLED={env.get('TELEGRAM_ENABLED', 'false')}",
         f"TELEGRAM_BOT_TOKEN={env.get('TELEGRAM_BOT_TOKEN', '')}",
-        f"TELEGRAM_ALLOWED={env.get('TELEGRAM_ALLOWED', '')}",
+        f"ADMIN_KEY={env.get('ADMIN_KEY', '')}",
+        f"USER_KEY={env.get('USER_KEY', '')}",
+        f"ACCOUNTING_DB_URL={env.get('ACCOUNTING_DB_URL', '')}",
     ]
     with open(ENV_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(env_lines) + "\n")
-    os.makedirs(os.path.join(ROOT, "config"), exist_ok=True)
+        f.write("\n".join(lines) + "\n")
+
+    # Write settings.json
+    os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2, ensure_ascii=False)
-    ok("📝 .env")
-    ok("📝 config/settings.json")
+        json.dump(st, f, ensure_ascii=False, indent=2)
 
+    ok("تم حفظ الإعدادات ✅")
 
-def _print_summary(env: dict, settings: dict) -> None:
-    perms = ", ".join(k for k, v in settings.get("permissions", {}).items() if v) or "none"
-    agent = settings.get("agent", {})
-    w = 58
+    # Summary
     print()
-    print(color("  ╔" + "═" * w + "╗", "green"))
-    print(box_line(color(f"  {L['summary_title']}", "bold", "green"), w - 4))
-    print(color("  ╠" + "═" * w + "╣", "green"))
-    print(box_line(f"  🤖  {L['model_ok']}:  {env.get('DEFAULT_MODEL', '')[:42]}", w - 4))
-    print(box_line(f"  👤  {L['identity_ok']}: {agent.get('name', '')[:42]} ({agent.get('language', 'auto')})", w - 4))
-    wa = "ON" if env.get("WHATSAPP_ENABLED") == "true" else "OFF"
-    tg = "ON" if env.get("TELEGRAM_ENABLED") == "true" else "OFF"
-    print(box_line(f"  📡  WhatsApp: {wa}  ·  Telegram: {tg}", w - 4))
-    acc = "connected" if env.get("ACCOUNTING_DB_URL") else "not configured"
-    print(box_line(f"  🏦  {L['steps'][4][:35]}: {acc}", w - 4))
-    print(box_line(f"  🛠️   {L['perm_enabled']}: {perms[:42]}", w - 4))
-    print(color("  ╠" + "═" * w + "╣", "green"))
-    print(box_line(color(f"  {L['keys_warn']}", "yellow", "bold"), w - 4))
-    print(box_line(f"  {L['admin']}: {color(env.get('ADMIN_KEY', ''), 'green', 'bold')}", w - 4))
-    print(box_line(f"  {L['user']}:  {color(env.get('USER_KEY', ''), 'green', 'bold')}", w - 4))
-    print(color("  ╠" + "═" * w + "╣", "green"))
-    print(box_line(color(f"  {L['start_cmd']}", "yellow", "bold"), w - 4))
-    print(box_line(f"  {color('python start.py', 'cyan', 'bold')}", w - 4))
-    print(box_line(f"  {color('http://localhost:8000', 'cyan')}", w - 4))
-    print(box_line(f"  {color('http://localhost:3001', 'cyan')}" + "  (WhatsApp QR)", w - 4))
-    if env.get("DEFAULT_MODEL", "").startswith("ollama:"):
-        model = env["DEFAULT_MODEL"].split(":", 1)[-1]
-        print(box_line(color(f"  (first time: ollama pull {model})", "dim"), w - 4))
-    print(color("  ╚" + "═" * w + "╝", "green"))
+    box_hdr("📋 ملخص الإعدادات / Summary", 62)
+    box_row(f"🤖 الموديل: {env.get('DEFAULT_MODEL', '?')}", 62)
+    box_row(f"👤 الوكيل: {st.get('agent',{}).get('name','?')} ({st.get('agent',{}).get('language','auto')})", 62)
+    box_row(f"📱 واتساب: {'✅' if env.get('WHATSAPP_ENABLED')=='true' else '❌'}", 62)
+    box_row(f"💬 تلغرام: {'✅' if env.get('TELEGRAM_ENABLED')=='true' else '❌'}", 62)
+    box_row(f"🏦 المحاسبة: {'✅' if env.get('ACCOUNTING_DB_URL') else '❌'}", 62)
+    box_row("", 62)
+    box_row(c(f"🔑 ADMIN_KEY: {env.get('ADMIN_KEY', '')}", "g", B), 62)
+    box_row(c(f"🔑 USER_KEY:  {env.get('USER_KEY', '')}", "g", B), 62)
+    box_row(c("⚠️ احفظ هذه المفاتيح!", "y"), 62)
+    box_end(62)
+    print()
+    print(c("  🚀 للتشغيل:", "g", B))
+    print(c("     python start.py", "c", B))
+    print(c("     http://localhost:8000", "c"))
     print()
 
 
-def _link_whatsapp(env: dict, settings: dict) -> None:
-    if not ask_yes(L["link_wa_now"], True):
-        warn(L["link_wa_skip"])
-        return
-    node = node_cmd()
-    npm = npm_cmd()
-    if not node or not npm:
-        fail(L["link_wa_no_node"])
-        info(L["node_hint"])
-        return
-    wa_dir = os.path.join(ROOT, "whatsapp")
-    nm = os.path.join(wa_dir, "node_modules")
-    pkg = os.path.join(wa_dir, "package.json")
-    stale = (not os.path.isdir(nm)) or (
-        os.path.exists(pkg) and os.path.getmtime(pkg) > os.path.getmtime(nm))
-    if stale:
-        with Spinner(L["npm_install"]):
-            r = subprocess.run(f'"{npm}" install', cwd=wa_dir, shell=True,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if r.returncode != 0:
-            fail(L["npm_fail"])
-            return
-        ok("npm install OK")
-    print()
-    info(L["link_start"])
-    info(L["link_phone_hint"])
-    info(L["link_wait"])
-    wa_env = dict(os.environ)
-    wa_env.update({
-        "AGENT_URL": "http://localhost:8000",
-        "WHATSAPP_PORT": "3001",
-        "ADMIN_KEY": env.get("ADMIN_KEY", "dev-admin-key"),
-        "USER_KEY": env.get("USER_KEY", "dev-user-key"),
-        "WHATSAPP_ROLE": env.get("WHATSAPP_ROLE", "user"),
-        "BOT_PREFIX": env.get("BOT_PREFIX", ""),
-        "IGNORE_GROUPS": env.get("IGNORE_GROUPS", "true"),
-        "ALLOWED_NUMBERS": env.get("ALLOWED_NUMBERS", ""),
-        "ADMIN_NUMBERS": env.get("ADMIN_NUMBERS", ""),
-        "CHAT_MEMORY": env.get("CHAT_MEMORY", "20"),
-        "REPORT_ENABLED": env.get("REPORT_ENABLED", "false"),
-        "REPORT_TIME": env.get("REPORT_TIME", "08:00"),
-        "REPORT_TO": env.get("REPORT_TO", ""),
-        "WHATSAPP_ENABLED": "true",
-    })
-    proc = subprocess.Popen([node, "index.js"], cwd=wa_dir, env=wa_env)
-    try:
-        linked = False
-        deadline = time.time() + 180  # 3-minute timeout for WhatsApp linking
-        while time.time() < deadline:
-            try:
-                with urllib.request.urlopen("http://localhost:3001/status", timeout=3) as r:
-                    if json.loads(r.read()).get("status") == "ready":
-                        linked = True
-                        break
-            except Exception:
-                pass
-            if proc.poll() is not None:
-                break
-            time.sleep(3)
-        print()
-        if linked:
-            ok(L["link_ok"])
-            # Ask for allowed numbers NOW (after QR scan)
-            print()
-            info(L["wa_allowed"])
-            info(L["wa_allowed_example"])
-            nums = ask(L["wa_allowed"], "")
-            env["ALLOWED_NUMBERS"] = ",".join(_re.sub(r"\D", "", n) for n in nums.split(",") if n.strip())
-            env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
-            # Update .env with the new numbers
-            _write_files(env, settings)
-            ok("✅ تم حفظ الأرقام المسموحة")
-        else:
-            warn(L["link_timeout"])
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except Exception:
-            proc.kill()
-
-
-# ─── Entry point ──────────────────────────────────────────────────
-def choose_language() -> None:
-    """Ask user to choose language first."""
-    global LANG, L
-    import sys as _sys
-    print()
-    print("  ╔════════════════════════════════════════╗")
-    print("  ║       Enterprise AI Agent Setup        ║")
-    print("  ╚════════════════════════════════════════╝")
-    print()
-    print("  Choose your language / اختر لغتك:")
-    print()
-    print("    1)  العربية")
-    print("    2)  English")
-    print()
-    while True:
-        choice = input("  ▶  Choose [1]: ").strip()
-        if not choice or choice == "1":
-            LANG = "ar"
-            break
-        if choice == "2":
-            LANG = "en"
-            break
-        print("  ✗ Invalid choice / اختيار غير صحيح")
-    L = STR[LANG]
-    _sys.stdout.write("\033[2J\033[H")  # clear screen
-    _sys.stdout.flush()
-
-
-def main() -> None:
-    env: dict = {}
-    settings: dict = {"version": 4}
-    try:
-        choose_language()
-        preflight_check()
-        banner()
-        step_model(env, settings)
-        step_identity(env, settings)
-        step_security(env, settings)
-        step_channels(env, settings)
-        step_accounting(env, settings)
-        step_permissions(env, settings)
-        step_finish(env, settings)
-    except KeyboardInterrupt:
-        print()
-        fail(L["aborted"])
-        sys.exit(1)
+# ═══════════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════════
+def main():
+    choose_language()
+    env = {}
+    st = {"version": 5}
+    step_model(env, st)
+    step_identity(env, st)
+    step_security(env, st)
+    step_channels(env, st)
+    step_accounting(env, st)
+    step_permissions(env, st)
+    step_finish(env, st)
 
 
 if __name__ == "__main__":
