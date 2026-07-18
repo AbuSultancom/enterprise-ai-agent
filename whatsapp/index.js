@@ -1,7 +1,7 @@
 /**
  * WhatsApp bridge service — connects WhatsApp (via QR login) to the AI agent.
  *
- * Flow: scan QR once (like WhatsApp Web) -> session persists in a volume ->
+ * Flow: scan QR once (like WhatsApp Web) -> session persists ->
  * every incoming message is forwarded to the agent's /v1/chat endpoint ->
  * the agent's answer is sent back as a WhatsApp reply.
  *
@@ -12,6 +12,7 @@
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode';
+import qrcodeTerminal from 'qrcode-terminal';
 import express from 'express';
 
 // --- Config ---
@@ -40,9 +41,10 @@ if (!WHATSAPP_ENABLED) {
 let qrDataUrl = null;
 let status = 'initializing'; // initializing | qr | ready | disconnected
 
-// --- WhatsApp client (session persisted in /data/.wwebjs_auth) ---
+// --- WhatsApp client (session persisted; /data in Docker, local folder otherwise) ---
+const DATA_PATH = process.env.WA_DATA_PATH || './.wwebjs_auth';
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: '/data/.wwebjs_auth' }),
+  authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -52,7 +54,11 @@ const client = new Client({
 client.on('qr', async (qr) => {
   status = 'qr';
   qrDataUrl = await qrcode.toDataURL(qr);
-  console.log('QR code ready — open http://localhost:' + PORT + ' to scan it');
+  console.log('\n========================================================');
+  console.log('  Scan this QR with WhatsApp -> Linked devices -> Link');
+  console.log('========================================================\n');
+  qrcodeTerminal.generate(qr, { small: true });
+  console.log('\n(QR also available at http://localhost:' + PORT + ')\n');
 });
 
 client.on('ready', () => {
@@ -122,4 +128,5 @@ app.get('/', (req, res) => {
 app.get('/status', (req, res) => res.json({ status }));
 
 app.listen(PORT, () => console.log(`QR web UI on http://localhost:${PORT}`));
+
 }
