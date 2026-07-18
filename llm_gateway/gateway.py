@@ -68,7 +68,9 @@ class OpenAICompatibleProvider(BaseProvider):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
 
     async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -142,7 +144,9 @@ class LLMGateway:
         else:
             p = self.providers["openai"]
             url = f"{p.base_url}/chat/completions"
-            headers = {"Authorization": f"Bearer {p.api_key}"}
+            headers = {}
+            if p.api_key:
+                headers["Authorization"] = f"Bearer {p.api_key}"
             payload = {"model": model_name, "stream": True,
                        "messages": [{"role": m.role, "content": m.content} for m in messages],
                        "temperature": kw.get("temperature", 0.3)}
@@ -181,7 +185,9 @@ class LLMGateway:
         p = self.providers["openai"]
         if p.api_key:
             try:
-                headers = {"Authorization": f"Bearer {p.api_key}"}
+                headers = {}
+                if p.api_key:
+                    headers["Authorization"] = f"Bearer {p.api_key}"
                 async with httpx.AsyncClient(timeout=60) as client:
                     r = await client.post(f"{p.base_url}/embeddings", headers=headers,
                                           json={"model": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
