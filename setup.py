@@ -52,14 +52,7 @@ def clear() -> None:
     os.system("cls" if os.name == "nt" else "clear")
 
 
-# ─── Bilingual strings ────────────────────────────────────────────
-LANG = "en"  # Default to English, user can switch at start
-
-def t(key: str) -> str:
-    """Get translation for current language."""
-    return STR[LANG].get(key, key) if 'STR' in dir() else key
-
-# STR dictionary starts on next line
+# ─── English strings (STR defined below, L set after) ─────────────
 
 STR = {
     "ar": {
@@ -312,7 +305,7 @@ STR = {
     },
 }
 
-L = STR[LANG]
+L = STR["en"]  # English only
 
 
 # ─── Pre-flight checks ────────────────────────────────────────────
@@ -1105,7 +1098,7 @@ def choose_language() -> None:
             LANG = "ar"
             break
         print("  ✗ Invalid choice / اختيار غير صحيح")
-    L = STR[LANG]
+    L = STR["en"]  # English only
     _sys.stdout.write("\033[2J\033[H")  # clear screen
     _sys.stdout.flush()
 
@@ -1114,8 +1107,6 @@ def main() -> None:
     env: dict = {}
     settings: dict = {"version": 4}
     try:
-        choose_language()
-        preflight_check()
         banner()
         step_model(env, settings)
         step_identity(env, settings)
