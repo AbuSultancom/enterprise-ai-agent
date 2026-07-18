@@ -700,16 +700,10 @@ def _db_help_box() -> None:
 
 def step_accounting(env: dict, settings: dict) -> None:
     section(5, L["steps"][4])
-    if maybe_skip(5, L["step_titles"][4]):
-        warn(L["acc_skip"])
-        settings["accounting"] = {"enabled": False, "read_only": True}
-        return
 
+    # Always show database config (don't allow skip)
     enabled = ask_yes(L["enable_accounting"], True)
     settings["accounting"] = {"enabled": enabled, "read_only": True}
-    if not enabled:
-        warn(L["acc_skip"])
-        return
 
     # ── Show the help box ──
     _db_help_box()
