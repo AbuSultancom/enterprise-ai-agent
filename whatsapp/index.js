@@ -29,6 +29,19 @@ const IGNORE_GROUPS = process.env.IGNORE_GROUPS !== 'false';
 // e.g. "9677xxxxxxx,8613xxxxxxxx"). Empty = everyone is allowed.
 const ALLOWED = (process.env.ALLOWED_NUMBERS || '')
   .split(',').map(n => n.trim().replace(/\D/g, '')).filter(Boolean);
+// Numbers that get ADMIN powers (accounting queries etc.). The linked (self) number is always admin.
+const ADMIN_NUMBERS = (process.env.ADMIN_NUMBERS || '')
+  .split(',').map(n => n.trim().replace(/\D/g, '')).filter(Boolean);
+// Conversation memory: last N exchanges kept per chat (0 = off).
+const MEMORY_TURNS = parseInt(process.env.CHAT_MEMORY || '5', 10);
+// Daily scheduled report: sends an agent-generated summary to REPORT_TO (or self-chat).
+const REPORT_ENABLED = (process.env.REPORT_ENABLED || 'false') === 'true';
+const REPORT_TIME = process.env.REPORT_TIME || '08:00';       // HH:MM (24h, server local time)
+const REPORT_TO = (process.env.REPORT_TO || '').replace(/\D/g, ''); // digits, empty = self-chat
+const REPORT_MESSAGE = process.env.REPORT_MESSAGE ||
+  'أعطني تقريرًا يوميًا مختصرًا: ملخص مبيعات اليوم وعدد الفواتير وأهم ملاحظة، في نقاط قصيرة.';
+
+const histories = new Map(); // chat id -> [{role, content}]
 
 // --- Tiny web UI for QR scanning + status ---
 const app = express();
@@ -77,8 +90,50 @@ client.on('disconnected', (reason) => {
   console.log('Disconnected:', reason);
 });
 
+// Pick the API key by role: self-chat & ADMIN_NUMBERS -> admin key, others -> user key.
+function keyForSender(senderDigits, fromMe) {
+  if (fromMe || ADMIN_NUMBERS.some(n => senderDigits.endsWith(n) || n.endsWith(senderDigits))) {
+    return process.env.ADMIN_KEY || 'dev-admin-key';
+  }
+  return process.env.USER_KEY || 'dev-user-key';
+}
+
+async function askAgent(text, apiKey, history) {
+  const res = await fetch(`${AGENT_URL}/v1/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+    body: JSON.stringify({ message: text, history }),
+  });
+  if (!res.ok) return `Agent error: ${res.status}`;
+  const data = await res.json();
+  return data.answer || 'No answer.';
+}
+
+const HELP_TEXT = `🤖 *أوامر البوت:*
+• ${PREFIX}ملخص — ملخص سريع لمبيعات اليوم
+• ${PREFIX}مسح — مسح ذاكرة المحادثة
+• ${PREFIX}مساعدة — هذه القائمة
+أو اكتب أي سؤال بعد ${PREFIX}وسأجيبك.`;
+
+// Built-in quick commands (matched on the text AFTER the prefix is stripped).
+function runCommand(text, chatId) {
+  const cmd = text.trim();
+  if (cmd === 'مساعدة' || cmd === 'help') return { reply: HELP_TEXT };
+  if (cmd === 'مسح' || cmd === 'clear') {
+    histories.delete(chatId);
+    return { reply: '🤖 تم مسح ذاكرة محادثتنا. نبدأ من جديد!' };
+  }
+  if (cmd === 'ملخص' || cmd === 'summary') {
+    return { ask: 'أعطني ملخصًا سريعًا لمبيعات اليوم في نقاط قصيرة بالعربية.' };
+  }
+  return null;
+}
+
 client.on('message', async (msg) => {
   try {
+    const chatId = msg.from;
+    const sender = msg.from.replace(/\D/g, '');
+
     // Self-chat ("Message yourself"): allowed ONLY with the prefix, so the bot
     // never replies to its own answers (infinite loop protection).
     if (msg.fromMe) {
@@ -93,7 +148,6 @@ client.on('message', async (msg) => {
       console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
 
       // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
-      const sender = msg.from.replace(/\D/g, '');
       if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
         console.log('  -> ignored: number not in ALLOWED_NUMBERS');
         return;
@@ -110,27 +164,53 @@ client.on('message', async (msg) => {
       if (!text) return;
     }
 
-    await msg.reply('⏳ ...');
-    const res = await fetch(`${AGENT_URL}/v1/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': AGENT_API_KEY,
-      },
-      body: JSON.stringify({ message: text }),
-    });
-
-    if (!res.ok) {
-      await msg.reply(`Agent error: ${res.status}`);
+    // built-in commands first
+    const cmd = runCommand(text, chatId);
+    if (cmd && cmd.reply) {
+      await msg.reply(cmd.reply);
       return;
     }
-    const data = await res.json();
-    await msg.reply('🤖 ' + (data.answer || 'No answer.'));
+    const question = (cmd && cmd.ask) || text;
+
+    // role-based key + conversation memory
+    const apiKey = keyForSender(sender, msg.fromMe);
+    const history = MEMORY_TURNS > 0 ? (histories.get(chatId) || []) : [];
+
+    await msg.reply('⏳ ...');
+    const answer = await askAgent(question, apiKey, history);
+
+    if (MEMORY_TURNS > 0 && !answer.startsWith('Agent error:')) {
+      history.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
+      histories.set(chatId, history.slice(-2 * MEMORY_TURNS));
+    }
+
+    await msg.reply('🤖 ' + answer);
   } catch (err) {
     console.error('Message handling error:', err);
     try { await msg.reply('Sorry, something went wrong.'); } catch {}
   }
 });
+
+// --- Daily scheduled report ---
+let lastReportDay = '';
+setInterval(async () => {
+  if (!REPORT_ENABLED || status !== 'ready') return;
+  const now = new Date();
+  const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const today = now.toISOString().slice(0, 10);
+  if (hhmm !== REPORT_TIME || lastReportDay === today) return;
+  lastReportDay = today;
+  try {
+    const apiKey = process.env.ADMIN_KEY || 'dev-admin-key';
+    console.log('[report] generating daily report...');
+    const answer = await askAgent(REPORT_MESSAGE, apiKey, []);
+    const chatId = REPORT_TO ? `${REPORT_TO}@c.us` : client.info.wid._serialized;
+    await client.sendMessage(chatId, '📊 *التقرير اليومي:*\n\n🤖 ' + answer);
+    console.log('[report] sent to', chatId);
+  } catch (e) {
+    console.error('[report] failed:', e.message);
+  }
+}, 30000);
 
 client.initialize();
 
