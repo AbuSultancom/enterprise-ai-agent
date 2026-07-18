@@ -110,11 +110,11 @@ function keyForSender(senderDigits, fromMe) {
   return process.env.USER_KEY || 'dev-user-key';
 }
 
-async function askAgent(text, apiKey, history) {
+async function askAgent(text, apiKey, history, sessionId) {
   const res = await fetch(`${AGENT_URL}/v1/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-    body: JSON.stringify({ message: text, history }),
+    body: JSON.stringify({ message: text, history, session_id: sessionId }),
   });
   if (!res.ok) return `Agent error: ${res.status}`;
   const data = await res.json();
@@ -260,7 +260,7 @@ client.on('message', async (msg) => {
     await msg.reply('⏳ ...');
     const chat = await msg.getChat();
     await chat.sendStateTyping();
-    const answer = await askAgent(question, apiKey, history);
+    const answer = await askAgent(question, apiKey, history, chatId);
     await chat.clearState();
 
     if (MEMORY_TURNS > 0 && !answer.startsWith('Agent error:')) {
@@ -297,7 +297,7 @@ setInterval(async () => {
     const apiKey = process.env.ADMIN_KEY || 'dev-admin-key';
     const message = REPORT_MESSAGES[REPORT_SCHEDULE] || REPORT_MESSAGE;
     console.log(`[report] generating ${REPORT_SCHEDULE} report...`);
-    const answer = await askAgent(message, apiKey, []);
+    const answer = await askAgent(message, apiKey, [], 'report');
     const chatId = REPORT_TO ? `${REPORT_TO}@c.us` : client.info.wid._serialized;
     await client.sendMessage(chatId, `📊 *${REPORT_TITLES[REPORT_SCHEDULE] || 'التقرير'}:*\n\n🤖 ` + answer);
     console.log('[report] sent to', chatId);
