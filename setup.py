@@ -516,7 +516,7 @@ def step_channels(env: dict, settings: dict) -> None:
     env["WHATSAPP_ENABLED"] = "true" if wa_on else "false"
     if wa_on:
         warn(L["wa_warn"])
-        env["BOT_PREFIX"] = ask(L["wa_prefix"], "!ai ")
+        env["BOT_PREFIX"] = ask(L["wa_prefix"], "")
         env["IGNORE_GROUPS"] = "true" if ask_yes(L["wa_ignore_groups"], True) else "false"
         role_choice = ask_choice(L["wa_role_prompt"], [
             L["wa_role_user"],
