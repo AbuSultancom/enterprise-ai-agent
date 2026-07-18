@@ -12,6 +12,7 @@ A self-hosted, open-source AI agent platform for companies — inspired by OpenC
 - **Audit log** — every chat, upload, and accounting query is logged (admin-only access)
 - **Accounting integration (ERP)** — connects read-only to your accounting database (Onyx Pro / SQL Server) so the agent answers "how much did we sell this month?", "top customers?", "cash balance?" — see [docs/ONYX_SETUP.md](docs/ONYX_SETUP.md)
 - **WhatsApp integration** — customers/staff chat with the agent on WhatsApp; login once via QR code (like WhatsApp Web) — see [docs/WHATSAPP_SETUP.md](docs/WHATSAPP_SETUP.md)
+- **WhatsApp power features** — conversation memory per chat, quick commands (`!ai ملخص` / `!ai مسح` / `!ai مساعدة`), per-number admin roles, and a daily scheduled report sent to your WhatsApp
 - **Telegram channel** — optional Telegram bot (token from @BotFather) with user whitelist; starts automatically with `start.py` when enabled
 - **Agent identity** — give the agent a name, answer language (auto/Arabic/English), and personality from the wizard; injected into the system prompt
 - **Role-based access** — `admin` and `user` roles via API keys (SSO/LDAP-ready design)
@@ -90,6 +91,12 @@ uvicorn api.main:app --reload
 | `MEMORY_DB_PATH` | `/data/knowledge.json` | Knowledge store file |
 | `ACCOUNTING_DB_URL` | — | Accounting DB (SQLAlchemy URL, SQL Server for Onyx Pro) |
 | `ALLOWED_NUMBERS` | — (everyone) | WhatsApp whitelist, comma-separated international numbers |
+| `ADMIN_NUMBERS` | — | WhatsApp numbers with admin powers (accounting queries); self-chat is always admin |
+| `CHAT_MEMORY` | `5` | Conversation memory: last N exchanges remembered per chat (`0` = off) |
+| `REPORT_ENABLED` | `false` | Send a daily AI-generated report on WhatsApp |
+| `REPORT_TIME` | `08:00` | Report time (HH:MM, server local time) |
+| `REPORT_TO` | — (self-chat) | Number that receives the daily report |
+| `REPORT_MESSAGE` | daily summary prompt | What the agent is asked for the daily report |
 | `TELEGRAM_ENABLED` | `false` | Start the Telegram bridge with `start.py` |
 | `TELEGRAM_BOT_TOKEN` | — | Bot token from @BotFather |
 | `TELEGRAM_ALLOWED` | — (everyone) | Telegram whitelist: user IDs or @usernames, comma-separated |
@@ -143,6 +150,7 @@ The agent discovers and can call it immediately — no other changes needed.
 - [x] Streaming responses (SSE)
 - [x] Audit log per user (`/v1/admin/audit`)
 - [x] Arabic / English dashboard (RTL)
+- [x] WhatsApp conversation memory, quick commands, per-number roles, daily report
 - [ ] Multi-agent orchestration and scheduled tasks
 - [ ] SSO / LDAP authentication
 
