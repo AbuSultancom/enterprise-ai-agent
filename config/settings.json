@@ -1,7 +1,7 @@
 {
   "version": 4,
   "llm": {
-    "default_model": "ollama:qwen2.5:7b"
+    "default_model": "openai:deepseek-chat"
   },
   "agent": {
     "name": "Enterprise AI Agent",
@@ -16,33 +16,22 @@
       "role": "user"
     },
     "telegram": {
-      "enabled": true,
-      "allowed": "y"
+      "enabled": false
     }
   },
   "accounting": {
-    "enabled": true,
-    "read_only": true,
-    "allowed_queries": [
-      "sales_summary",
-      "revenue_by_month",
-      "top_customers",
-      "expenses_summary",
-      "invoice_lookup",
-      "cash_balance",
-      "vendor_balances",
-      "sales_by_item"
-    ]
+    "enabled": false,
+    "read_only": true
   },
   "permissions": {
     "web_search": true,
     "calculator": true,
     "get_current_time": true,
     "read_file": true,
-    "search_conversations": true,
+    "search_conversations": false,
     "generate_report": true,
     "list_reports": true,
-    "accounting_tools": true,
+    "accounting_tools": false,
     "knowledge_rag": true
   }
 }
