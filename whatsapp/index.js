@@ -1,7 +1,7 @@
 /**
  * WhatsApp bridge service — connects WhatsApp (via QR login) to the AI agent.
  *
- * Flow: scan QR once (like WhatsApp Web) -> session persists ->
+ * Flow: scan QR once (like WhatsApp Web) -> session persists in a volume ->
  * every incoming message is forwarded to the agent's /v1/chat endpoint ->
  * the agent's answer is sent back as a WhatsApp reply.
  *
@@ -25,6 +25,10 @@ const AGENT_API_KEY = ROLE === 'admin'
 const PORT = process.env.WHATSAPP_PORT || 3001;
 const PREFIX = process.env.BOT_PREFIX || ''; // e.g. "!ai " to only reply when prefixed; empty = reply to all
 const IGNORE_GROUPS = process.env.IGNORE_GROUPS !== 'false';
+// Comma-separated phone numbers allowed to talk to the bot (international format,
+// e.g. "9677xxxxxxx,8613xxxxxxxx"). Empty = everyone is allowed.
+const ALLOWED = (process.env.ALLOWED_NUMBERS || '')
+  .split(',').map(n => n.trim().replace(/\D/g, '')).filter(Boolean);
 
 // --- Tiny web UI for QR scanning + status ---
 const app = express();
@@ -76,6 +80,13 @@ client.on('message', async (msg) => {
   try {
     if (msg.fromMe) return;
     if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) return;
+
+    // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
+    const sender = msg.from.replace(/\D/g, '');
+    if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
+      console.log('Ignored message from non-allowed number:', sender);
+      return;
+    }
 
     let text = msg.body.trim();
     if (PREFIX) {
