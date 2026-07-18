@@ -5,11 +5,12 @@ Enterprise AI Agent — One-Command Launcher
     python start.py
 
 Does EVERYTHING in one go:
-  1. Runs the setup wizard (only if .env is missing)
-  2. Installs Python dependencies (only if missing)
-  3. Installs WhatsApp bridge dependencies (only if missing)
-  4. Starts the AI agent API + dashboard  -> http://localhost:8000
-  5. Starts the WhatsApp bridge           -> QR prints right here in the terminal
+  1. Checks Python version and dependencies
+  2. Runs the setup wizard (only if .env is missing)
+  3. Installs Python dependencies (only if missing)
+  4. Installs WhatsApp bridge dependencies (only if missing)
+  5. Starts the AI agent API + dashboard  -> http://localhost:8000
+  6. Starts the WhatsApp bridge           -> QR prints right here in the terminal
 
 Press Ctrl+C to stop everything.
 """
@@ -29,14 +30,87 @@ ENV_FILE = os.path.join(ROOT, ".env")
 
 def c(text: str, *colors: str) -> str:
     palette = {"g": "\033[92m", "y": "\033[93m", "b": "\033[94m",
-               "c": "\033[96m", "r": "\033[91m", "bold": "\033[1m", "dim": "\033[2m"}
+               "c": "\033[96m", "r": "\033[91m", "m": "\033[95m",
+               "bold": "\033[1m", "dim": "\033[2m"}
     if not colors:
         return text
     return "".join(palette.get(x, "") for x in colors) + text + "\033[0m"
 
 
+def banner() -> None:
+    print(c("""
+  ╔═══════════════════════════════════════════════╗
+  ║     ___                   _    ___            ║
+  ║    | __|_ ___ __ _ _ __  (_)  / __|___ _ _   ║
+  ║    | _|\\ \\ / '_ \\ '_ \\ | |  \\__ \\/ _ \\ '_|  ║
+  ║    |___/_\\_\\ .__/ .__/_|_|  |___/\\___/_|     ║
+  ║            |_|  |_|  v0.5                     ║
+  ╚═══════════════════════════════════════════════╝
+  """, "c", "bold"))
+    print(c("  Enterprise AI Agent Platform", "bold"))
+    print(c("  " + "=" * 42, "dim"))
+    print()
+
+
 def step(msg: str) -> None:
-    print(c("\n==> ", "c", "bold") + c(msg, "bold"))
+    print(c("\n  ═══ ", "c") + c(msg, "bold") + c(" ═══", "c"))
+
+
+def ok(msg: str) -> None:
+    print(f"  {c('✔', 'g', 'bold')} {c(msg, 'g')}")
+
+
+def warn(msg: str) -> None:
+    print(f"  {c('⚠', 'y', 'bold')} {c(msg, 'y')}")
+
+
+def fail(msg: str) -> None:
+    print(f"  {c('✖', 'r', 'bold')} {c(msg, 'r')}")
+
+
+def info(msg: str) -> None:
+    print(f"  {c('·', 'c')} {c(msg, 'dim')}")
+
+
+def check_python() -> bool:
+    if sys.version_info < (3, 11):
+        fail(f"Python ≥ 3.11 مطلوب (الإصدار الحالي: {sys.version_info[0]}.{sys.version_info[1]})")
+        fail(f"Python ≥ 3.11 required (current: {sys.version_info[0]}.{sys.version_info[1]})")
+        return False
+    return True
+
+
+def check_venv() -> None:
+    in_venv = (hasattr(sys, "real_prefix") or
+               (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
+    if not in_venv:
+        warn("البيئة الافتراضية غير مفعلة — يفضل استخدام venv")
+        warn("Virtual environment not active")
+
+
+def check_deps(auto_install: bool = True) -> bool:
+    missing = []
+    for pkg in ["fastapi", "uvicorn", "httpx", "pydantic"]:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        if auto_install:
+            step("تثبيت الاعتماديات / Installing dependencies")
+            info(f"المفقودة: {', '.join(missing)}")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
+                                       os.path.join(ROOT, "requirements.txt")],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                ok("تم تثبيت الاعتماديات / Dependencies installed")
+                return True
+            except Exception:
+                fail("فشل تثبيت الاعتماديات / Failed to install dependencies")
+                return False
+        else:
+            return False
+    return True
 
 
 def load_env() -> dict:
@@ -53,29 +127,19 @@ def load_env() -> dict:
 
 def run_setup_if_needed() -> None:
     if os.path.exists(ENV_FILE):
-        print(c("  .env found — skipping wizard (delete it to reconfigure)", "dim"))
+        ok("ملف .env موجود — تجاوز المعالج")
         return
-    step("First run — starting the setup wizard")
-    import setup
-    setup.main()
+    step("التشغيل الأول — تشغيل معالج الإعداد")
+    info("سيتم تشغيل setup.py لتكوين الوكيل")
+    time.sleep(1)
+    subprocess.check_call([sys.executable, os.path.join(ROOT, "setup.py")])
     if not os.path.exists(ENV_FILE):
-        print(c("Setup did not produce .env — aborting.", "r"))
+        fail(".env لم يتم إنشاؤه — إلغاء")
         sys.exit(1)
-
-
-def ensure_python_deps() -> None:
-    try:
-        import fastapi, uvicorn, httpx, sqlalchemy  # noqa: F401
-        print(c("  Python dependencies OK", "dim"))
-        return
-    except ImportError:
-        step("Installing Python dependencies (first time)...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
-                               os.path.join(ROOT, "requirements.txt")])
+    ok("تم إعداد الوكيل بنجاح")
 
 
 def npm_cmd() -> str | None:
-    """Full path to npm (handles npm.cmd on Windows)."""
     for name in ("npm", "npm.cmd", "npm.exe"):
         path = shutil.which(name)
         if path:
@@ -88,7 +152,6 @@ def node_cmd() -> str | None:
 
 
 def node_deps_stale(wa_dir: str) -> bool:
-    """True if node_modules is missing or package.json is newer than it."""
     nm = os.path.join(wa_dir, "node_modules")
     pkg = os.path.join(wa_dir, "package.json")
     if not os.path.isdir(nm):
@@ -102,42 +165,50 @@ def node_deps_stale(wa_dir: str) -> bool:
 def ensure_node_deps(npm: str) -> None:
     wa = os.path.join(ROOT, "whatsapp")
     if not node_deps_stale(wa):
-        print(c("  WhatsApp dependencies OK", "dim"))
+        ok("اعتماديات واتساب جاهزة")
         return
-    step("Installing WhatsApp bridge dependencies...")
+    step("تثبيت اعتماديات واتساب...")
     subprocess.check_call(f'"{npm}" install', cwd=wa, shell=True)
+    ok("تم تثبيت اعتماديات واتساب")
+
+
+def check_node() -> str | None:
+    node = node_cmd()
+    if node:
+        ok(f"Node.js: {node}")
+    else:
+        warn("Node.js غير مثبت — واتساب لن يعمل. ثبته من https://nodejs.org")
+    return node
 
 
 def main() -> None:
     os.chdir(ROOT)
-    print(c(r"""
-  _____       _                       _    ___
- | ____|_ __ | |_ ___ _ __ _ __  ___ / \  |_ _|
- |  _| | '_ \| __/ _ \ '__| '_ \/ __/ _ \  | |
- | |___| | | | ||  __/ |  | |_) \__ \ ___ \ | |
- |_____|_| |_|\__\___|_|  | .__/|___/_/   \_\___|
-  Enterprise AI Agent     |_|     One-Command Launcher
-""", "c"))
 
+    # ── Banner ──
+    banner()
+
+    # ── Checks ──
+    if not check_python():
+        sys.exit(1)
+    check_venv()
+    if not check_deps():
+        sys.exit(1)
+
+    # ── Setup ──
     run_setup_if_needed()
     env = load_env()
 
-    step("Checking dependencies")
-    ensure_python_deps()
-
+    # ── Node / WhatsApp ──
+    node = check_node()
     npm = npm_cmd()
-    whatsapp_on = env.get("WHATSAPP_ENABLED", "true") == "true"
-    if whatsapp_on and npm is None:
-        print(c("  [!] Node.js not found — WhatsApp bridge disabled.", "y"))
-        print(c("      Install Node.js from https://nodejs.org then re-run start.py", "dim"))
-        whatsapp_on = False
-    if whatsapp_on:
+    whatsapp_on = env.get("WHATSAPP_ENABLED", "true") == "true" and node is not None
+    if whatsapp_on and npm:
         ensure_node_deps(npm)
 
+    # ── Prepare env ──
     env.setdefault("MEMORY_DB_PATH", os.path.join(ROOT, "data", "knowledge.json"))
     env.setdefault("AUDIT_LOG_PATH", os.path.join(ROOT, "data", "audit.jsonl"))
     env.setdefault("SETTINGS_PATH", os.path.join(ROOT, "config", "settings.json"))
-    # build the API_KEYS map (role:key,role:key) the API expects, from wizard keys
     env.setdefault("API_KEYS",
                    f"admin:{env.get('ADMIN_KEY', 'dev-admin-key')},user:{env.get('USER_KEY', 'dev-user-key')}")
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
@@ -145,7 +216,7 @@ def main() -> None:
     children: list[subprocess.Popen] = []
 
     def shutdown(*_):
-        print(c("\n\nStopping everything...", "y"))
+        print(c("\n\n  ═══ جارٍ إيقاف الخدمات... ═══", "y"))
         for p in children:
             try:
                 p.terminate()
@@ -157,26 +228,32 @@ def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, shutdown)
 
-    step("Starting the AI agent API  ->  http://localhost:8000")
+    # ── Start API ──
+    step("تشغيل الوكيل / Starting AI Agent")
+    print(c(f"  Dashboard:  http://localhost:8000", "c", "bold"))
     agent = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000",
+         "--log-level", "warning"],
         cwd=ROOT, env=env)
     children.append(agent)
     time.sleep(2)
 
-    if whatsapp_on:
-        step("Starting the WhatsApp bridge  ->  QR will appear below")
+    # ── Start WhatsApp ──
+    if whatsapp_on and npm:
+        step("تشغيل واتساب / Starting WhatsApp Bridge")
         node = node_cmd() or "node"
         wa_env = dict(env)
         wa_env.setdefault("AGENT_URL", "http://localhost:8000")
         wa_env.setdefault("WHATSAPP_PORT", "3001")
+        print(c(f"  WhatsApp QR: http://localhost:3001", "c"))
         wa = subprocess.Popen([node, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
         children.append(wa)
 
+    # ── Start Telegram ──
     telegram_on = (env.get("TELEGRAM_ENABLED", "false") == "true"
                    and bool(env.get("TELEGRAM_BOT_TOKEN")))
     if telegram_on:
-        step("Starting the Telegram bridge")
+        step("تشغيل تلغرام / Starting Telegram Bridge")
         tg_env = dict(env)
         tg_env.setdefault("AGENT_URL", "http://localhost:8000")
         tg = subprocess.Popen(
@@ -184,27 +261,30 @@ def main() -> None:
             cwd=ROOT, env=tg_env)
         children.append(tg)
 
-    print(c("\n" + "=" * 58, "g"))
-    print(c("  ALL RUNNING", "g", "bold"))
-    print(c("=" * 58, "g"))
-    print(f"  Dashboard:   {c('http://localhost:8000', 'c')}")
-    if whatsapp_on:
-        print(f"  WhatsApp QR: {c('http://localhost:3001', 'c')}  (or scan the QR printed above)")
+    # ── Summary ──
+    print(c("\n  ╔" + "═" * 50 + "╗", "g"))
+    print(c("  ║" + " " * 50 + "║", "g"))
+    print(c("  ║" + "      ✅  ALL RUNNING  ".center(50) + "║", "g", "bold"))
+    print(c("  ║" + " " * 50 + "║", "g"))
+    print(c("  ╚" + "═" * 50 + "╝", "g"))
+    print(f"    {c('🌐 Dashboard:', 'bold')}   {c('http://localhost:8000', 'c')}")
+    if whatsapp_on and npm:
+        print(f"    {c('📱 WhatsApp QR:', 'bold')} {c('http://localhost:3001', 'c')}")
     if telegram_on:
-        print(f"  Telegram:    {c('bot connected — message it from Telegram', 'c')}")
-    print(c("\n  Press Ctrl+C to stop everything\n", "dim"))
+        print(f"    {c('💬 Telegram:', 'bold')}   Bot connected — message it")
+    print(c(f"\n    Press Ctrl+C to stop everything\n", "dim"))
 
     try:
         webbrowser.open("http://localhost:8000")
     except Exception:
         pass
 
-    # keep alive; if a child dies, exit with its code
+    # keep alive
     while True:
         for p in children:
             code = p.poll()
             if code is not None:
-                print(c(f"\nA service stopped (exit code {code}). Shutting down.", "r"))
+                print(c(f"\n  ✖ خدمة توقفت (رمز {code}). جاري الإيقاف.", "r"))
                 shutdown()
         time.sleep(1)
 
