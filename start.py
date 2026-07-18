@@ -125,6 +125,9 @@ def main() -> None:
     env.setdefault("MEMORY_DB_PATH", os.path.join(ROOT, "data", "knowledge.json"))
     env.setdefault("AUDIT_LOG_PATH", os.path.join(ROOT, "data", "audit.jsonl"))
     env.setdefault("SETTINGS_PATH", os.path.join(ROOT, "config", "settings.json"))
+    # build the API_KEYS map (role:key,role:key) the API expects, from wizard keys
+    env.setdefault("API_KEYS",
+                   f"admin:{env.get('ADMIN_KEY', 'dev-admin-key')},user:{env.get('USER_KEY', 'dev-user-key')}")
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
 
     children: list[subprocess.Popen] = []
