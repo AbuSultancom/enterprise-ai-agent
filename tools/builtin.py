@@ -275,3 +275,384 @@ async def get_currency_rate(from_currency: str, to_currency: str) -> str:
             return f"Could not get exchange rate."
     except Exception as e:
         return f"Currency error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# 🇸🇦 Saudi Arabia Business Tools
+# ---------------------------------------------------------------------------
+
+
+@registry.register(
+    description="الحصول على سعر سهم سعودي من Argaam/Tadawul — احصل على السهم (مثل 1120 للراجحي)",
+    parameters={
+        "symbol": {"type": "str", "description": "رمز السهم (مثل 1120 لألراجحي)"},
+    },
+)
+async def tasi_stocks(symbol: str) -> str:
+    """Get Saudi stock price from Argaam/Tadawul. Returns price, change, volume."""
+    import httpx
+    try:
+        symbol = symbol.strip()
+        url = f"https://www.argaam.com/ar/company/companyoverview/{symbol}"
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            r = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            if r.status_code != 200:
+                # Fallback: try the screener endpoint
+                alt_url = f"https://www.argaam.com/ar/screener/company/data/overview?companyId={symbol}"
+                r = await client.get(alt_url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                })
+                if r.status_code != 200:
+                    return f"⚠️ تعذر الحصول على بيانات السهم {symbol}. قد يكون الرمز غير صحيح."
+            text = r.text
+            # Try to extract price from page
+            import re
+            price_match = re.search(r'<span[^>]*class="[^"]*price[^"]*"[^>]*>([\d.,]+)', text)
+            change_match = re.search(r'<span[^>]*class="[^"]*change[^"]*"[^>]*>([+-]?[\d.,]+)', text)
+            if price_match:
+                price = price_match.group(1)
+                change = change_match.group(1) if change_match else "N/A"
+                return (
+                    f"📈 سهم {symbol}\n"
+                    f"السعر: {price} ريال\n"
+                    f"التغير: {change}\n"
+                    f"(المصدر: Argaam)"
+                )
+            return f"📊 تم استرداد بيانات السهم {symbol} بنجاح (تعذر استخراج السعر من الصفحة)."
+    except Exception as e:
+        return f"⚠️ خطأ في جلب بيانات السهم {symbol}: {e}"
+
+
+@registry.register(
+    description="حاسبة ضريبة القيمة المضافة 15% — حساب ضريبة القيمة المضافة السعودية",
+    parameters={
+        "amount": {"type": "number", "description": "المبلغ بالريال"},
+        "inclusive": {"type": "bool", "description": "هل المبلغ شامل الضريبة؟ (True = استخراج الضريبة, False = إضافة الضريبة)",
+                       "default": False},
+    },
+)
+async def vat_calc(amount: float, inclusive: bool = False) -> str:
+    """Calculate Saudi VAT (15%). If inclusive, extracts VAT from total.
+    If not inclusive, adds VAT to the amount."""
+    try:
+        rate = 0.15
+        if inclusive:
+            # Total includes VAT: VAT = Total * (rate / (1 + rate))
+            vat = amount * (rate / (1 + rate))
+            original = amount - vat
+            total = amount
+        else:
+            original = amount
+            vat = amount * rate
+            total = amount + vat
+        return (
+            f"🧾 حاسبة ضريبة القيمة المضافة (15%)\n"
+            f"{'─' * 35}\n"
+            f"المبلغ الأصلي:       {original:,.2f} ريال\n"
+            f"قيمة الضريبة (15%):  {vat:,.2f} ريال\n"
+            f"{'─' * 35}\n"
+            f"الإجمالي:            {total:,.2f} ريال"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب ضريبة القيمة المضافة: {e}"
+
+
+@registry.register(
+    description="حاسبة هامش الربح — حساب الربح وهامش الربح ونسبة الترميز",
+    parameters={
+        "cost": {"type": "number", "description": "التكلفة (سعر الشراء)"},
+        "selling_price": {"type": "number", "description": "سعر البيع"},
+    },
+)
+async def profit_margin(cost: float, selling_price: float) -> str:
+    """Calculate profit margin. Returns profit amount, margin %, and markup %."""
+    try:
+        if cost <= 0:
+            return "⚠️ التكلفة يجب أن تكون أكبر من صفر."
+        profit = selling_price - cost
+        margin_pct = (profit / selling_price) * 100
+        markup_pct = (profit / cost) * 100
+        return (
+            f"📊 حاسبة هامش الربح\n"
+            f"{'─' * 35}\n"
+            f"التكلفة:              {cost:,.2f} ريال\n"
+            f"سعر البيع:            {selling_price:,.2f} ريال\n"
+            f"{'─' * 35}\n"
+            f"الربح:                {profit:,.2f} ريال\n"
+            f"هامش الربح:          {margin_pct:.2f}%\n"
+            f"نسبة الترميز:        {markup_pct:.2f}%"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب هامش الربح: {e}"
+
+
+@registry.register(
+    description="حاسبة العائد على الاستثمار (ROI) — حساب العائد كنسبة مئوية",
+    parameters={
+        "initial_investment": {"type": "number", "description": "قيمة الاستثمار الأولية"},
+        "final_value": {"type": "number", "description": "القيمة النهائية للاستثمار"},
+    },
+)
+async def roi_calc(initial_investment: float, final_value: float) -> str:
+    """Return on Investment calculator. Returns ROI percentage and profit/loss."""
+    try:
+        if initial_investment <= 0:
+            return "⚠️ الاستثمار الأولي يجب أن يكون أكبر من صفر."
+        profit = final_value - initial_investment
+        roi_pct = (profit / initial_investment) * 100
+        status = "ربح 📈" if profit >= 0 else "خسارة 📉"
+        return (
+            f"💰 حاسبة العائد على الاستثمار (ROI)\n"
+            f"{'─' * 35}\n"
+            f"الاستثمار الأولي:      {initial_investment:,.2f} ريال\n"
+            f"القيمة النهائية:       {final_value:,.2f} ريال\n"
+            f"{'─' * 35}\n"
+            f"الربح/الخسارة:        {profit:+,.2f} ريال\n"
+            f"العائد على الاستثمار: {roi_pct:+.2f}%\n"
+            f"الحالة:               {status}"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب العائد على الاستثمار: {e}"
+
+
+@registry.register(
+    description="حاسبة القروض والتمويل — حساب القسط الشهري والفائدة الإجمالية",
+    parameters={
+        "amount": {"type": "number", "description": "مبلغ القرض"},
+        "interest_rate": {"type": "number", "description": "نسبة الفائدة السنوية % (مثال: 5.5)"},
+        "months": {"type": "number", "description": "مدة القرض بالأشهر"},
+    },
+)
+async def loan_calc(amount: float, interest_rate: float, months: int) -> str:
+    """Loan/Financing calculator. Calculates monthly payment, total payment, total interest."""
+    try:
+        if amount <= 0 or months <= 0:
+            return "⚠️ المبلغ والمدة يجب أن يكونا أكبر من صفر."
+        monthly_rate = (interest_rate / 100) / 12
+        if monthly_rate == 0:
+            monthly_payment = amount / months
+        else:
+            monthly_payment = amount * (monthly_rate * (1 + monthly_rate) ** months) / ((1 + monthly_rate) ** months - 1)
+        total_payment = monthly_payment * months
+        total_interest = total_payment - amount
+        return (
+            f"🏦 حاسبة القروض والتمويل\n"
+            f"{'─' * 35}\n"
+            f"مبلغ القرض:           {amount:,.2f} ريال\n"
+            f"نسبة الفائدة:         {interest_rate:.2f}%\n"
+            f"المدة:                {months} شهر\n"
+            f"{'─' * 35}\n"
+            f"القسط الشهري:         {monthly_payment:,.2f} ريال\n"
+            f"مجموع المدفوعات:      {total_payment:,.2f} ريال\n"
+            f"إجمالي الفائدة:       {total_interest:,.2f} ريال"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب القرض: {e}"
+
+
+@registry.register(
+    description="حاسبة الزكاة — حساب الزكاة بنسبة 2.5% على النقد والذهب والأسهم",
+    parameters={
+        "cash": {"type": "number", "description": "النقد المتوفر (ريال)", "default": 0},
+        "gold_value": {"type": "number", "description": "قيمة الذهب (ريال)", "default": 0},
+        "stocks_value": {"type": "number", "description": "قيمة الأسهم (ريال)", "default": 0},
+        "debts": {"type": "number", "description": "الديون المستحقة عليك (ريال)", "default": 0},
+    },
+)
+async def zakat_calc(cash: float = 0, gold_value: float = 0, stocks_value: float = 0, debts: float = 0) -> str:
+    """Zakat calculator. Zakat rate = 2.5%. Returns total wealth and zakat due."""
+    try:
+        total_wealth = cash + gold_value + stocks_value
+        net_wealth = total_wealth - debts
+        zakat_rate = 0.025
+        zakat_due = max(0, net_wealth * zakat_rate)
+        return (
+            f"🕌 حاسبة الزكاة (2.5%)\n"
+            f"{'─' * 35}\n"
+            f"النقد:                {cash:,.2f} ريال\n"
+            f"الذهب:                {gold_value:,.2f} ريال\n"
+            f"الأسهم:               {stocks_value:,.2f} ريال\n"
+            f"إجمالي الثروة:        {total_wealth:,.2f} ريال\n"
+            f"الديون:               {debts:,.2f} ريال\n"
+            f"صافي الثروة:          {net_wealth:,.2f} ريال\n"
+            f"{'─' * 35}\n"
+            f"الزكاة الواجبة (2.5%): {zakat_due:,.2f} ريال"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب الزكاة: {e}"
+
+
+@registry.register(
+    description="حساب الأيام بين تاريخين — معرفة عدد الأيام والأسابيع والأشهر",
+    parameters={
+        "start_date": {"type": "str", "description": "تاريخ البداية (YYYY-MM-DD)"},
+        "end_date": {"type": "str", "description": "تاريخ النهاية (YYYY-MM-DD)"},
+    },
+)
+async def contract_days(start_date: str, end_date: str) -> str:
+    """Calculate days between two dates. Returns total days, weeks, months."""
+    try:
+        from datetime import datetime
+        start = datetime.strptime(start_date, "%Y-%m-%d")
+        end = datetime.strptime(end_date, "%Y-%m-%d")
+        delta = end - start
+        total_days = delta.days
+        if total_days < 0:
+            return "⚠️ تاريخ النهاية يجب أن يكون بعد تاريخ البداية."
+        weeks = total_days // 7
+        remaining_days = total_days % 7
+        months_approx = round(total_days / 30.44, 1)
+        return (
+            f"📅 حساب المدة بين تاريخين\n"
+            f"{'─' * 35}\n"
+            f"تاريخ البداية:        {start_date}\n"
+            f"تاريخ النهاية:        {end_date}\n"
+            f"{'─' * 35}\n"
+            f"عدد الأيام:           {total_days:,} يوم\n"
+            f"عدد الأسابيع:         {weeks} أسبوع و{remaining_days} يوم\n"
+            f"عدد اأشهر (تقريباً):  {months_approx} شهر"
+        )
+    except ValueError:
+        return "⚠️ صيغة التاريخ غير صحيحة. استخدم YYYY-MM-DD (مثال: 2024-01-01)"
+    except Exception as e:
+        return f"⚠️ خطأ في حساب المدة: {e}"
+
+
+@registry.register(
+    description="حاسبة مكافأة نهاية الخدمة السعودية — حسب نظام العمل السعودي",
+    parameters={
+        "salary": {"type": "number", "description": "آخر راتب شهري (ريال)"},
+        "years": {"type": "number", "description": "عدد سنوات الخدمة"},
+        "reason": {"type": "str", "description": "سبب إنهاء الخدمة: 'resign' (استقالة) أو 'termination' (فصل/إنهاء)"},
+    },
+)
+async def end_service(salary: float, years: float, reason: str) -> str:
+    """Saudi labor law end-of-service reward calculator.
+
+    Saudi Labor Law rules:
+    - Termination: Half month salary for first 5 years, full month for each year after 5.
+    - Resignation (less than 2 years): No reward.
+    - Resignation (2-5 years): 1/3 of the termination amount.
+    - Resignation (5-10 years): 2/3 of the termination amount.
+    - Resignation (10+ years): Full termination amount.
+    """
+    try:
+        if salary <= 0 or years <= 0:
+            return "⚠️ الراتب وعدد السنوات يجب أن يكونا أكبر من صفر."
+        reason = reason.strip().lower()
+        # Termination calculation (full entitlement)
+        if years <= 5:
+            termination_reward = (salary / 2) * years
+        else:
+            termination_reward = (salary / 2) * 5 + salary * (years - 5)
+        if reason == "termination" or reason == "فصل" or reason == "إنهاء":
+            reward = termination_reward
+            reason_label = "إنهاء خدمة / فصل"
+            breakdown = (
+                f"أول 5 سنوات: {min(years, 5):.0f} × نصف الراتب ({salary:,.2f}/2)\n"
+                f"بعد 5 سنوات: {max(0, years - 5):.0f} × الراتب الكامل ({salary:,.2f})"
+            )
+        elif reason == "resign" or reason == "استقالة":
+            if years < 2:
+                reward = 0
+                reason_label = "استقالة (أقل من سنتين)"
+                breakdown = "لا تستحق مكافأة نهاية خدمة إذا كانت مدة الخدمة أقل من سنتين."
+            elif years < 5:
+                reward = termination_reward / 3
+                reason_label = f"استقالة (بين سنتين و5 سنوات)"
+                breakdown = f"تستحق ثلث مكافأة الفصل: {termination_reward:,.2f} / 3"
+            elif years < 10:
+                reward = termination_reward * 2 / 3
+                reason_label = f"استقالة (بين 5 و10 سنوات)"
+                breakdown = f"تستحق ثلثي مكافأة الفصل: {termination_reward:,.2f} × 2/3"
+            else:
+                reward = termination_reward
+                reason_label = "استقالة (أكثر من 10 سنوات)"
+                breakdown = "تستحق كامل مكافأة نهاية الخدمة (أكثر من 10 سنوات خدمة)."
+        else:
+            return f"⚠️ سبب غير معروف: '{reason}'. استخدم 'resign' أو 'termination'."
+        return (
+            f"📋 حاسبة مكافأة نهاية الخدمة\n"
+            f"{'─' * 40}\n"
+            f"الراتب الشهري:           {salary:,.2f} ريال\n"
+            f"سنوات الخدمة:            {years:.0f} سنة\n"
+            f"سبب الإنهاء:             {reason_label}\n"
+            f"{'─' * 40}\n"
+            f"{breakdown}\n"
+            f"{'─' * 40}\n"
+            f"💰 إجمالي المكافأة:      {reward:,.2f} ريال"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب مكافأة نهاية الخدمة: {e}"
+
+
+@registry.register(
+    description="البحث عن شركة في السعودية — بحث بالسجل التجاري أو الاسم التجاري",
+    parameters={
+        "query": {"type": "str", "description": "اسم الشركة أو رقم السجل التجاري"},
+    },
+)
+async def company_search(query: str) -> str:
+    """Search for a Saudi company by name or commercial registration number via web search."""
+    try:
+        from ddgs import DDGS
+        search_query = f"منشأة {query} السعودية سجل تجاري"
+        with DDGS() as ddgs:
+            results = list(ddgs.text(search_query, max_results=5))
+        if not results:
+            search_query = f"{query} شركة السعودية"
+            with DDGS() as ddgs:
+                results = list(ddgs.text(search_query, max_results=5))
+        if not results:
+            return f"⚠️ لم يتم العثور على نتائج لـ '{query}'. حاول استخدام اسم أكثر تحديداً."
+        lines = [
+            f"🔍 نتائج البحث عن: {query}",
+            "─" * 40,
+        ]
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "").strip()
+            snippet = r.get("body", "").strip()[:250]
+            url = r.get("href", "")
+            lines.append(f"{i}. {title}")
+            if snippet:
+                lines.append(f"   {snippet}")
+            lines.append(f"   🌐 {url}")
+            lines.append("")
+        return "\n".join(lines).strip()
+    except ImportError:
+        return "⚠️ البحث غير متاح: مكتبة duckduckgo_search غير مثبتة."
+    except Exception as e:
+        return f"⚠️ خطأ في البحث عن الشركة: {e}"
+
+
+@registry.register(
+    description="حاسبة نقطة التعادل — حساب عدد الوحدات والإيرادات المطلوبة لتحقيق التعادل",
+    parameters={
+        "fixed_costs": {"type": "number", "description": "التكاليف الثابتة (ريال)"},
+        "variable_cost_per_unit": {"type": "number", "description": "التكلفة المتغيرة للوحدة (ريال)"},
+        "selling_price_per_unit": {"type": "number", "description": "سعر بيع الوحدة (ريال)"},
+    },
+)
+async def break_even(fixed_costs: float, variable_cost_per_unit: float, selling_price_per_unit: float) -> str:
+    """Break-even point calculator. Returns break-even units and revenue."""
+    try:
+        if selling_price_per_unit <= variable_cost_per_unit:
+            return "⚠️ سعر البيع يجب أن يكون أكبر من التكلفة المتغيرة للوحدة."
+        contribution_margin = selling_price_per_unit - variable_cost_per_unit
+        be_units = fixed_costs / contribution_margin
+        be_revenue = be_units * selling_price_per_unit
+        return (
+            f"📊 حاسبة نقطة التعادل\n"
+            f"{'─' * 35}\n"
+            f"التكاليف الثابتة:           {fixed_costs:,.2f} ريال\n"
+            f"التكلفة المتغيرة للوحدة:   {variable_cost_per_unit:,.2f} ريال\n"
+            f"سعر بيع الوحدة:            {selling_price_per_unit:,.2f} ريال\n"
+            f"هامش المساهمة:             {contribution_margin:,.2f} ريال\n"
+            f"{'─' * 35}\n"
+            f"نقطة التعادل بالوحدات:     {be_units:,.0f} وحدة\n"
+            f"نقطة التعادل بالإيرادات:   {be_revenue:,.2f} ريال"
+        )
+    except Exception as e:
+        return f"⚠️ خطأ في حساب نقطة التعادل: {e}"
