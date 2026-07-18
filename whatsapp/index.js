@@ -79,22 +79,25 @@ client.on('disconnected', (reason) => {
 
 client.on('message', async (msg) => {
   try {
+    // Self-chat ("Message yourself"): allowed ONLY with the prefix, so the bot
+    // never replies to its own answers (infinite loop protection).
     if (msg.fromMe) {
-      console.log('[msg] ignored: sent FROM the bot account itself (fromMe). Message the bot from a DIFFERENT number.');
-      return;
-    }
-    if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) {
-      console.log('[msg] ignored: group message (IGNORE_GROUPS=true)');
-      return;
-    }
+      if (!PREFIX || !(msg.body || '').trim().startsWith(PREFIX)) return;
+      console.log(`[msg] self-chat command: ${(msg.body || '').slice(0, 60)}`);
+    } else {
+      if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) {
+        console.log('[msg] ignored: group message (IGNORE_GROUPS=true)');
+        return;
+      }
 
-    console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
+      console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
 
-    // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
-    const sender = msg.from.replace(/\D/g, '');
-    if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
-      console.log('  -> ignored: number not in ALLOWED_NUMBERS');
-      return;
+      // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
+      const sender = msg.from.replace(/\D/g, '');
+      if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
+        console.log('  -> ignored: number not in ALLOWED_NUMBERS');
+        return;
+      }
     }
 
     let text = msg.body.trim();
@@ -122,7 +125,7 @@ client.on('message', async (msg) => {
       return;
     }
     const data = await res.json();
-    await msg.reply(data.answer || 'No answer.');
+    await msg.reply('🤖 ' + (data.answer || 'No answer.'));
   } catch (err) {
     console.error('Message handling error:', err);
     try { await msg.reply('Sorry, something went wrong.'); } catch {}
