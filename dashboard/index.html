@@ -1004,11 +1004,17 @@ async function showHealth(){
         </div>
       </div>
       ${acc?`<div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
-        <strong>🏦 ${t('feat_accounting')||'Accounting'}</strong>
+        <strong>🏦 ${t('feat_accounting')||'Accounting'} (${acc.count||0})</strong>
         <div style="font-size:0.8rem;color:var(--fg2);margin-top:4px">
-          ${acc.connection?.connected?'✅ '+t('status_ok'):'❌ '+t('status_error')}
-          ${acc.connection?.database?'<br>DB: '+acc.connection.database:''}
-          <br>Tables: ${acc.schema?.tables?Object.keys(acc.schema.tables).length:0}
+          ${(acc.databases||[]).map(db=>
+            `<div style="margin:4px 0;padding:4px 8px;background:var(--bg4);border-radius:4px">
+              ${db.connection?.connected?'✅':'❌'} <strong>${db.name}</strong> (${db.key})
+              ${db.connection?.database?'<br>Server: '+db.connection.database:''}
+              ${db.schema?'<br>Tables: '+Object.keys(db.schema.tables).length:''}
+              ${db.connection?.error?'<br><span style="color:var(--danger)">'+db.connection.error+'</span>':''}
+            </div>`
+          ).join('')||'No databases'}
+          <br><span style="opacity:0.6">Connected: ${acc.available?'✅':'❌'}</span>
         </div>
       </div>`:''}
       <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">

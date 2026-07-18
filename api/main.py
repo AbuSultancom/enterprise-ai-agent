@@ -298,6 +298,18 @@ async def get_audit(limit: int = 100):
 class AccountingQuery(BaseModel):
     query: str
     params: dict | None = None
+    database: str | None = None
+
+
+class AddDatabaseRequest(BaseModel):
+    key: str
+    name: str
+    db_url: str
+    discover: bool = True
+
+
+class RemoveDatabaseRequest(BaseModel):
+    key: str
 
 
 @app.post("/v1/accounting/query", dependencies=[Depends(require_role("admin"))])
@@ -305,37 +317,127 @@ async def accounting_query(req: AccountingQuery, role: str = Security(require_ro
     """Run a whitelisted read-only accounting query (admin only)."""
     if req.query not in config_loader.allowed_accounting_queries():
         raise HTTPException(status_code=403, detail=f"Query '{req.query}' is not allowed by settings")
-    audit("accounting_query", role, {"query": req.query, "params": req.params})
+    audit("accounting_query", role, {"query": req.query, "params": req.params, "database": req.database})
     try:
-        return accounting_db.run(req.query, **(req.params or {}))
+        db_name = req.database or None  # None = default
+        return accounting_db.run(req.query, db_name=db_name, **(req.params or {}))
     except (RuntimeError, ValueError, PermissionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/v1/accounting/health", dependencies=[Depends(require_role("admin"))])
 async def accounting_health():
-    """Test accounting database connection."""
-    status = accounting_db.test_connection()
-    schema = accounting_db.get_schema_info()
-    return {"connection": status, "schema": schema}
+    """Test all accounting database connections."""
+    dbs = accounting_db.list_databases()
+    results = []
+    for db in dbs:
+        status = accounting_db.test_connection(db["key"])
+        try:
+            schema = accounting_db.get_schema_info(db["key"])
+        except RuntimeError:
+            schema = None
+        results.append({
+            "key": db["key"],
+            "name": db["name"],
+            "connection": status,
+            "schema": schema,
+        })
+    # Also include backward-compat top-level fields
+    default_key = accounting_db.default_db
+    default_status = accounting_db.test_connection(default_key)
+    default_schema = accounting_db.get_schema_info(default_key) if default_key else {}
+    return {
+        "databases": results,
+        "count": len(results),
+        "connection": default_status,
+        "schema": default_schema,
+        "available": accounting_db.available,
+    }
 
 
 @app.post("/v1/accounting/discover", dependencies=[Depends(require_role("admin"))])
-async def accounting_discover():
-    """Auto-discover table/column mappings from the live database."""
-    from connectors.accounting import discover_schema, SCHEMA_CONFIG_PATH
-    import os
-    db_url = os.getenv("ACCOUNTING_DB_URL", "")
+async def accounting_discover(db_url: str = "", name: str = ""):
+    """Auto-discover table/column mappings from a live database.
+
+    If db_url is provided, discovers that database and adds it to the config.
+    If empty, discovers the first configured database.
+    """
+    from connectors.accounting import discover_schema, SCHEMA_CONFIG_PATH, _save_multi_db_config
+
     if not db_url:
-        raise HTTPException(status_code=400, detail="ACCOUNTING_DB_URL not set in .env")
+        # Use the first configured database
+        dbs = accounting_db.list_databases()
+        if not dbs:
+            raise HTTPException(status_code=400, detail="No databases configured. Provide db_url or configure one first.")
+        first = dbs[0]
+        schema = accounting_db._get_schema(first["key"])
+        db_url = schema.db_url
+        if not db_url:
+            raise HTTPException(status_code=400, detail=f"Database '{first['key']}' has no db_url set")
+
     try:
-        schema = discover_schema(db_url)
-        schema.save()
-        audit("accounting_discover", "admin", {"tables": len(schema.tables)})
-        return {"status": "ok", "tables": len(schema.tables), "saved_to": SCHEMA_CONFIG_PATH,
-                "schema": {k: v["table"] for k, v in schema.tables.items()}}
+        discovered = discover_schema(db_url)
+        discovered.db_url = db_url
+        if name:
+            discovered.name = name
+        # Add as a new database or update the first one
+        dbs = accounting_db.list_databases()
+        target_key = dbs[0]["key"] if dbs else "onyx"
+        try:
+            existing = accounting_db._get_schema(target_key)
+            discovered.name = existing.name or name or discovered.name
+            discovered.db_url = db_url
+            # Replace the database in the config
+            accounting_db._databases[target_key] = discovered
+            _save_multi_db_config(accounting_db._databases)
+        except (RuntimeError, ValueError):
+            accounting_db.add_database(target_key, name or "Discovered", db_url, discovered)
+
+        audit("accounting_discover", "admin", {"tables": len(discovered.tables), "database": target_key})
+        return {"status": "ok", "tables": len(discovered.tables), "saved_to": SCHEMA_CONFIG_PATH,
+                "database": target_key,
+                "schema": {k: v["table"] for k, v in discovered.tables.items()}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/v1/accounting/databases", dependencies=[Depends(require_role("admin"))])
+async def list_accounting_databases():
+    """List all configured accounting databases."""
+    return accounting_db.list_databases()
+
+
+@app.post("/v1/accounting/databases", dependencies=[Depends(require_role("admin"))])
+async def add_accounting_database(req: AddDatabaseRequest, role: str = Security(require_role("admin"))):
+    """Add a new accounting database to the config."""
+    from connectors.accounting import discover_schema
+    schema = None
+    if req.discover:
+        try:
+            discovered = discover_schema(req.db_url)
+            discovered.name = req.name
+            discovered.db_url = req.db_url
+            schema = discovered
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Schema discovery failed: {e}")
+    try:
+        accounting_db.add_database(req.key, req.name, req.db_url, schema)
+        audit("accounting_add_db", role, {"key": req.key, "name": req.name})
+        return {"status": "ok", "key": req.key, "name": req.name,
+                "tables": len(schema.tables) if schema else 0}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/v1/accounting/databases/{db_key}", dependencies=[Depends(require_role("admin"))])
+async def remove_accounting_database(db_key: str, role: str = Security(require_role("admin"))):
+    """Remove an accounting database from the config."""
+    if not accounting_db.remove_database(db_key):
+        raise HTTPException(status_code=404, detail=f"Database '{db_key}' not found")
+    audit("accounting_remove_db", role, {"key": db_key})
+    return {"status": "removed", "key": db_key}
 
 
 app.mount("/", StaticFiles(directory="dashboard", html=True), name="dashboard")

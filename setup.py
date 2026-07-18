@@ -563,54 +563,105 @@ def step_accounting(env: dict, settings: dict) -> None:
     if not enabled:
         warn(L["acc_skip"])
         return
-    info(L["acc_warn"])
-    host = ask(L["acc_host"], "192.168.1.10")
+
+    # Multi-DB: collect database configs
+    db_configs: list[dict] = []
+    db_idx = 1
+
     while True:
-        port_raw = ask(L["acc_port"], "1433")
-        if port_raw.isdigit():
-            port = int(port_raw)
+        if db_idx > 1:
+            print()
+            info(f"📦 Database #{db_idx}")
+        info(L["acc_warn"])
+        host = ask(L["acc_host"], "192.168.1.10")
+        while True:
+            port_raw = ask(L["acc_port"], "1433")
+            if port_raw.isdigit():
+                port = int(port_raw)
+                break
+            fail("❌")
+        db_name = ask(L["acc_db"], "OnyxDB")
+        user = ask(L["acc_user"], "ai_agent_reader")
+        password = ask(L["acc_pass"])
+
+        # Use database name as the key (sanitized)
+        db_key = db_name.lower().replace(" ", "_").replace("-", "_")
+        display_name = ask("Display name (label)", db_name)
+
+        with Spinner(f"Testing {host}:{port}"):
+            reachable, info2 = test_tcp(host, port)
+        if reachable:
+            ok(f"{L['acc_server_ok']} at {host}:{port}")
+        else:
+            warn(f"{L['acc_server_fail']} ({info2})")
+
+        db_url = (
+            f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db_name}"
+            "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+        )
+
+        db_configs.append({
+            "key": db_key,
+            "name": display_name,
+            "db_url": db_url,
+        })
+        ok(f"✅ {display_name} ({db_key})")
+
+        # Store first DB URL in ACCOUNTING_DB_URL for backward compat
+        if db_idx == 1:
+            env["ACCOUNTING_DB_URL"] = db_url
+
+        print()
+        # Ask to add another
+        if db_idx >= 1 and not ask_yes("Add another database? / هل تريد إضافة قاعدة بيانات أخرى؟", False):
             break
-        fail("❌")
-    db = ask(L["acc_db"], "OnyxDB")
-    user = ask(L["acc_user"], "ai_agent_reader")
-    password = ask(L["acc_pass"])
-    with Spinner(f"Testing {host}:{port}"):
-        reachable, info2 = test_tcp(host, port)
-    if reachable:
-        ok(f"{L['acc_server_ok']} at {host}:{port}")
-    else:
-        warn(f"{L['acc_server_fail']} ({info2})")
-    env["ACCOUNTING_DB_URL"] = (
-        f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db}"
-        "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
-    )
+        db_idx += 1
+
     settings["accounting"]["allowed_queries"] = [
         "sales_summary", "revenue_by_month", "top_customers",
         "expenses_summary", "invoice_lookup", "cash_balance",
         "vendor_balances", "sales_by_item",
     ]
 
-    # Schema discovery
-    if ask_yes("🔄 اكتشاف هيكل الجداول تلقائياً؟", True) if LANG == "ar" else \
-       ask_yes("🔄 Auto-discover table schema now?", True):
-        with Spinner("Discovering database schema..."):
-            try:
-                from connectors.accounting import discover_schema, SCHEMA_CONFIG_PATH
-                schema = discover_schema(env["ACCOUNTING_DB_URL"])
-                schema.save()
-                found = len(schema.tables)
-                if found > 0:
-                    ok(f"تم اكتشاف {found} جدول")
-                    for k, v in schema.tables.items():
-                        info(f"  {v['table']} → {k}")
-                else:
-                    warn("لم يتم العثور على جداول - استخدم التكوين الافتراضي")
-            except ImportError:
-                warn("SQLAlchemy غير مثبت - جارٍ استخدام التكوين الافتراضي")
-            except Exception as e:
-                warn(f"فشل الاكتشاف - جارٍ استخدام التكوين الافتراضي: {e}")
-    else:
-        info("تم استخدام التكوين الافتراضي (Onyx Pro)")
+    # Save multi-DB config
+    if db_configs:
+        from connectors.accounting import SchemaConfig, _save_multi_db_config, DEFAULT_SCHEMA
+        databases = {}
+        for cfg in db_configs:
+            databases[cfg["key"]] = SchemaConfig(
+                version=1,
+                name=cfg["name"],
+                db_url=cfg["db_url"],
+                enabled=True,
+            )
+        _save_multi_db_config(databases)
+        ok(f"📝 Saved {len(db_configs)} database(s) to config/accounting_schema.json")
+
+    # Schema discovery for each DB
+    for cfg in db_configs:
+        if ask_yes(f"🔄 Auto-discover schema for {cfg['name']}? / اكتشاف هيكل {cfg['name']}؟", True):
+            with Spinner(f"Discovering schema for {cfg['name']}..."):
+                try:
+                    from connectors.accounting import discover_schema, _load_multi_db_config
+                    discovered = discover_schema(cfg["db_url"])
+                    discovered.name = cfg["name"]
+                    discovered.db_url = cfg["db_url"]
+                    dbs = _load_multi_db_config()
+                    dbs[cfg["key"]] = discovered
+                    _save_multi_db_config(dbs)
+                    found = len(discovered.tables)
+                    if found > 0:
+                        ok(f"{cfg['name']}: تم اكتشاف {found} جدول")
+                        for k, v in discovered.tables.items():
+                            info(f"  {v['table']} → {k}")
+                    else:
+                        warn(f"{cfg['name']}: لم يتم العثور على جداول")
+                except ImportError:
+                    warn("SQLAlchemy غير مثبت - جارٍ استخدام التكوين الافتراضي")
+                except Exception as e:
+                    warn(f"فشل الاكتشاف: {e}")
+        else:
+            info(f"{cfg['name']}: تم استخدام التكوين الافتراضي (Onyx Pro)")
 
     ok(L["acc_ok"])
 
