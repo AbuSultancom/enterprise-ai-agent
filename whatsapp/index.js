@@ -258,7 +258,10 @@ client.on('message', async (msg) => {
     const history = MEMORY_TURNS > 0 ? (histories.get(chatId) || []) : [];
 
     await msg.reply('⏳ ...');
+    const chat = await msg.getChat();
+    await chat.sendStateTyping();
     const answer = await askAgent(question, apiKey, history);
+    await chat.clearState();
 
     if (MEMORY_TURNS > 0 && !answer.startsWith('Agent error:')) {
       history.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
