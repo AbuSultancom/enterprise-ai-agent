@@ -656,3 +656,29 @@ async def break_even(fixed_costs: float, variable_cost_per_unit: float, selling_
         )
     except Exception as e:
         return f"⚠️ خطأ في حساب نقطة التعادل: {e}"
+
+# ─── Employee Directory ──────────────────────────────────────────
+from tools.directory import search_employee as _search_emp, add_employee as _add_emp
+
+@registry.register(
+    description="Search employees by name, department, role, or phone. Use when asked about employee contact info, \"رقم فلان\", or \"من يعمل في قسم كذا\".",
+    parameters={"query": {"type": "str", "description": "Search term (name, department, role, phone) — empty for all employees"}}
+)
+async def search_employee_tool(query: str = "") -> str:
+    return await _search_emp(query)
+
+@registry.register(
+    description="Add a new employee to the company directory.",
+    parameters={
+        "name": {"type": "str", "description": "Full name"},
+        "role": {"type": "str", "description": "Job title"},
+        "department": {"type": "str", "description": "Department"},
+        "phone": {"type": "str", "description": "Phone number"},
+        "email": {"type": "str", "description": "Email"},
+        "name_en": {"type": "str", "description": "English name (optional)"},
+    }
+)
+async def add_employee_tool(name: str, role: str = "", department: str = "",
+                            phone: str = "", email: str = "", name_en: str = "") -> str:
+    return await _add_emp(name, role, department, phone, email, name_en)
+
