@@ -1,7 +1,6 @@
 # Python
 __pycache__/
 *.py[cod]
-*.so
 *.egg-info/
 dist/
 build/
@@ -27,6 +26,12 @@ Thumbs.db
 
 # Node
 node_modules/
+whatsapp/.wwebjs_auth/
+whatsapp/.wwebjs_cache/
+whatsapp/package-lock.json
 
 # Accounting schema (generated from discovery)
 config/accounting_schema.json
+
+# Embedded git repos
+enterprise-ai-agent/
