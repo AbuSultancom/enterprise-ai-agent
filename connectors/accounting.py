@@ -30,6 +30,13 @@ try:
 except ImportError:
     HAS_SQLALCHEMY = False
 
+# Oracle driver (optional)
+try:
+    import oracledb
+    ORACLE_AVAILABLE = True
+except ImportError:
+    ORACLE_AVAILABLE = False
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_CONFIG_PATH = os.getenv("ACCOUNTING_SCHEMA_PATH",
                                os.path.join(ROOT, "config", "accounting_schema.json"))
@@ -660,7 +667,11 @@ class AccountingConnector:
                 f"Database '{key}' has no db_url configured."
             )
         if not HAS_SQLALCHEMY:
-            raise RuntimeError("SQLAlchemy not installed. Run: pip install sqlalchemy pyodbc")
+            raise RuntimeError(
+                "SQLAlchemy not installed. "
+                "For SQL Server: pip install sqlalchemy pyodbc\n"
+                "For Oracle: pip install sqlalchemy oracledb"
+            )
 
         engine_key = f"{key}"
         if engine_key not in self._engines:

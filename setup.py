@@ -689,10 +689,22 @@ def step_accounting(env: dict, settings: dict) -> None:
         else:
             warn(f"{L['acc_server_fail']} ({info2})")
 
-        db_url = (
-            f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db_name}"
-            "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
-        )
+        # Ask for database type
+        db_type = ask_choice("نوع قاعدة البيانات / Database type:", [
+            "SQL Server (MSSQL) — Onyx Pro, ERP",
+            "Oracle — Oracle Database",
+            "Other (MySQL, PostgreSQL...)",
+        ])
+        if db_type == 1:  # Oracle
+            service_name = ask("Oracle Service Name (e.g. ORCL, XE)", "ORCL")
+            db_url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service_name}"
+        elif db_type == 2:  # Other
+            db_url = ask("Connection string (full URL)", f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}")
+        else:  # SQL Server (default)
+            db_url = (
+                f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db_name}"
+                "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+            )
 
         db_configs.append({
             "key": db_key,
