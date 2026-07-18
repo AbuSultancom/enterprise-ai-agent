@@ -785,8 +785,9 @@ def step_finish(env: dict, settings: dict) -> None:
     section(7, L["steps"][6])
     _write_files(env, settings)
     _print_summary(env, settings)
+    # Link WhatsApp if enabled
     if env.get("WHATSAPP_ENABLED") == "true":
-        _link_whatsapp(env)
+        _link_whatsapp(env, settings)
     else:
         warn("WhatsApp disabled — skipping.")
 
@@ -857,7 +858,7 @@ def _print_summary(env: dict, settings: dict) -> None:
     print()
 
 
-def _link_whatsapp(env: dict) -> None:
+def _link_whatsapp(env: dict, settings: dict) -> None:
     if not ask_yes(L["link_wa_now"], True):
         warn(L["link_wa_skip"])
         return
