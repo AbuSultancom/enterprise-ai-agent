@@ -75,10 +75,16 @@ def ensure_python_deps() -> None:
 
 
 def npm_cmd() -> str | None:
-    for name in ("npm", "npm.cmd"):
-        if shutil.which(name):
-            return name
+    """Full path to npm (handles npm.cmd on Windows)."""
+    for name in ("npm", "npm.cmd", "npm.exe"):
+        path = shutil.which(name)
+        if path:
+            return path
     return None
+
+
+def node_cmd() -> str | None:
+    return shutil.which("node") or shutil.which("node.exe")
 
 
 def ensure_node_deps(npm: str) -> None:
@@ -87,7 +93,7 @@ def ensure_node_deps(npm: str) -> None:
         print(c("  WhatsApp dependencies OK", "dim"))
         return
     step("Installing WhatsApp bridge dependencies (first time)...")
-    subprocess.check_call([npm, "install"], cwd=wa, shell=(npm.endswith(".cmd")))
+    subprocess.check_call(f'"{npm}" install', cwd=wa, shell=True)
 
 
 def main() -> None:
@@ -145,10 +151,11 @@ def main() -> None:
 
     if whatsapp_on:
         step("Starting the WhatsApp bridge  ->  QR will appear below")
+        node = node_cmd() or "node"
         wa_env = dict(env)
         wa_env.setdefault("AGENT_URL", "http://localhost:8000")
         wa_env.setdefault("WHATSAPP_PORT", "3001")
-        wa = subprocess.Popen(["node", "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
+        wa = subprocess.Popen([node, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
         children.append(wa)
 
     print(c("\n" + "=" * 58, "g"))
