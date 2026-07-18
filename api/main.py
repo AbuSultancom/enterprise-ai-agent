@@ -7,7 +7,7 @@ import json
 import os
 import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, Security, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
@@ -29,8 +29,26 @@ for _tool in list(registry.list()):
         del registry._tools[_tool.name]
 
 # --- Simple role-based auth (replace with SSO/LDAP in production) ---
+def _load_dotenv() -> None:
+    """Load .env next to the project root so keys always match, however the API was started."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv()
+
 API_KEYS: dict[str, str] = {}  # key -> role
-for entry in os.getenv("API_KEYS", "admin:dev-admin-key").split(","):
+_keys_env = os.getenv("API_KEYS")
+if not _keys_env:  # build from wizard keys if the launcher didn't pass API_KEYS
+    _keys_env = f"admin:{os.getenv('ADMIN_KEY', 'dev-admin-key')},user:{os.getenv('USER_KEY', 'dev-user-key')}"
+for entry in _keys_env.split(","):
     role, key = entry.split(":", 1)
     API_KEYS[key] = role
 

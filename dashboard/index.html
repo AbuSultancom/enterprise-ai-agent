@@ -58,6 +58,7 @@ const I18N = {
     upload_fail: 'فشل رفع الملف: ',
     error: 'خطأ: ',
     key_prompt: 'أدخل مفتاح API:',
+    key_invalid: 'المفتاح المحفوظ لم يعد صالحًا (ربما تغيّر بعد إعادة الإعداد). أدخل المفتاح الجديد من ملف .env',
     dir: 'rtl', lang_btn: 'EN'
   },
   en: {
@@ -70,6 +71,7 @@ const I18N = {
     upload_fail: 'Upload failed: ',
     error: 'Error: ',
     key_prompt: 'Enter your API key:',
+    key_invalid: 'The saved key is no longer valid (it may have changed after re-running setup). Enter the new key from your .env file',
     dir: 'ltr', lang_btn: 'عربي'
   }
 };
@@ -113,11 +115,11 @@ function addMsg(text, cls) {
   return div;
 }
 
-async function send() {
-  const text = input.value.trim();
+async function send(retryText, isRetry) {
+  const text = retryText || input.value.trim();
   if (!text) return;
   input.value = '';
-  addMsg(text, 'user');
+  if (!isRetry) addMsg(text, 'user');
   const t = I18N[lang];
   const bubble = addMsg('', 'agent');
   bubble.innerHTML = `<span class="cursor"></span>`;
@@ -133,6 +135,17 @@ async function send() {
       body: JSON.stringify({message: text})
     });
     if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        localStorage.removeItem('api_key');
+        const fresh = prompt(t.key_invalid) || '';
+        if (fresh) {
+          localStorage.setItem('api_key', fresh);
+          API_KEY = fresh;
+          bubble.remove();
+          send(text, true);
+          return;
+        }
+      }
       const d = await r.json().catch(() => ({}));
       bubble.textContent = t.error + (d.detail || r.statusText);
       return;
