@@ -51,7 +51,13 @@ def clear() -> None:
 
 
 # ─── Bilingual strings ────────────────────────────────────────────
-LANG = "ar"  # "ar" or "en" - toggle here or detect locale later
+LANG = "ar"  # will be set by user at start
+
+def t(key: str) -> str:
+    """Get translation for current language."""
+    return STR[LANG].get(key, key) if 'STR' in dir() else key
+
+# STR dictionary starts on next line
 
 STR = {
     "ar": {
@@ -847,10 +853,39 @@ def _link_whatsapp(env: dict) -> None:
 
 
 # ─── Entry point ──────────────────────────────────────────────────
+def choose_language() -> None:
+    """Ask user to choose language first."""
+    global LANG, L
+    import sys as _sys
+    print()
+    print("  ╔════════════════════════════════════════╗")
+    print("  ║       Enterprise AI Agent Setup        ║")
+    print("  ╚════════════════════════════════════════╝")
+    print()
+    print("  Choose your language / اختر لغتك:")
+    print()
+    print("    1)  العربية")
+    print("    2)  English")
+    print()
+    while True:
+        choice = input("  ▶  Choose [1]: ").strip()
+        if not choice or choice == "1":
+            LANG = "ar"
+            break
+        if choice == "2":
+            LANG = "en"
+            break
+        print("  ✗ Invalid choice / اختيار غير صحيح")
+    L = STR[LANG]
+    _sys.stdout.write("\033[2J\033[H")  # clear screen
+    _sys.stdout.flush()
+
+
 def main() -> None:
     env: dict = {}
     settings: dict = {"version": 4}
     try:
+        choose_language()
         banner()
         step_model(env, settings)
         step_identity(env, settings)
