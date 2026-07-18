@@ -652,12 +652,10 @@ def step_accounting(env: dict, settings: dict) -> None:
         warn(L["acc_skip"])
         settings["accounting"] = {"enabled": False, "read_only": True}
         return
-    enabled = ask_yes(L["enable_accounting"], False)
+    enabled = ask_yes(L["enable_accounting"], True)
     settings["accounting"] = {"enabled": enabled, "read_only": True}
     if not enabled:
-        warn(L["acc_skip"])
-        return
-
+        warn("سيتم حفظ الإعدادات ولكن بدون تفعيل المحاسبة")
     # Multi-DB: collect database configs
     db_configs: list[dict] = []
     db_idx = 1
