@@ -1,7 +1,8 @@
 # Installation & Setup Guide
 
 One command after downloading the project — the wizard asks about everything
-(AI model, WhatsApp, accounting, permissions) and generates all config files.
+(AI model, WhatsApp + allowed numbers, accounting, permissions) and can link
+your WhatsApp right inside the wizard.
 
 ## 1. Download
 
@@ -16,7 +17,7 @@ cd enterprise-ai-agent
 python setup.py        # or: python3 setup.py
 ```
 
-The wizard walks you through 5 sections — press **Enter** to accept any default:
+The wizard walks you through 6 sections — press **Enter** to accept any default:
 
 ### Section 1 — AI model
 Choose the agent's brain:
@@ -32,6 +33,8 @@ Choose the agent's brain:
 - Optional **prefix** (e.g. `!ai `) so the bot only replies to prefixed messages
 - Ignore group chats (default: yes)
 - Which **role** WhatsApp users get: `user` (safe, recommended) or `admin`
+- **Allowed phone numbers** — whitelist of numbers that may talk to the bot
+  (international format, comma-separated; empty = everyone)
 
 ### Section 4 — Accounting (Onyx Pro)
 - SQL Server host, port, database, user, password
@@ -46,14 +49,25 @@ Toggle each capability:
 - Querying accounting data
 - Using the knowledge base (RAG) in answers
 
+### Section 6 — Link WhatsApp now
+- The wizard launches the bridge and prints the **QR right inside the wizard**
+- Scan it (WhatsApp → Linked devices → Link a device); the wizard detects the
+  connection and confirms it — the session is saved, no QR needed next time
+
 ## 3. What the wizard generates
 
 | File | Contents |
 |---|---|
-| `.env` | API keys, model, WhatsApp & accounting settings (loaded by Docker Compose) |
+| `.env` | API keys, model, WhatsApp & accounting settings, allowed numbers |
 | `config/settings.json` | Agent permissions & accounting query whitelist (enforced by the API at runtime) |
 
 ## 4. Start
+
+```bash
+python start.py     # everything: agent + dashboard + WhatsApp bridge
+```
+
+Or with Docker:
 
 ```bash
 cd deploy
@@ -63,17 +77,16 @@ docker compose up -d --build
 | Service | URL |
 |---|---|
 | Web dashboard | http://localhost:8000 (log in with admin key) |
-| WhatsApp QR scan | http://localhost:3001 |
+| WhatsApp QR scan | http://localhost:3001 (or the terminal QR) |
 
 First time with Ollama:
 ```bash
-docker exec -it deploy-ollama-1 ollama pull qwen2.5:7b
+ollama pull qwen2.5:7b
 ```
 
 ## Changing settings later
 
-- **Quick change:** edit `.env` or `config/settings.json`, then
-  `cd deploy && docker compose up -d` (config folder is mounted into the container)
+- **Quick change:** edit `.env` or `config/settings.json`, then restart
 - **Full reconfigure:** run `python setup.py` again
 
 ## Manual setup (without the wizard)
