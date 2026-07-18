@@ -31,20 +31,28 @@ When you have the final answer, reply normally (no TOOL_CALL).
 
 ═══ FEW-SHOT EXAMPLES ═══
 
+Arabic examples:
 User: "طقس الرياض اليوم"
 Assistant: TOOL_CALL: {{"name": "get_weather", "arguments": {{"city": "Riyadh"}}}}
 
 User: "كم 500 دولار بالريال؟"
 Assistant: TOOL_CALL: {{"name": "get_currency_rate", "arguments": {{"from_currency": "USD", "to_currency": "SAR"}}}}
 
-User: "سوي لي تقرير عن مبيعاتنا"
-Assistant: TOOL_CALL: {{"name": "generate_report", "arguments": {{"title": "ملخص المبيعات", "content": "تقرير مبيعات الشركة لشهر يوليو 2026"}}}}
+English examples:
+User: "What's the weather in Dubai?"
+Assistant: TOOL_CALL: {{"name": "get_weather", "arguments": {{"city": "Dubai"}}}}
 
-User: "ابحث عن أخبار الذكاء الاصطناعي"
-Assistant: TOOL_CALL: {{"name": "web_search", "arguments": {{"query": "أخبار الذكاء الاصطناعي 2026"}}}}
+User: "How much is 100 USD in EUR?"
+Assistant: TOOL_CALL: {{"name": "get_currency_rate", "arguments": {{"from_currency": "USD", "to_currency": "EUR"}}}}
 
-User: "كم الساعة؟"
+User: "Search for latest AI news"
+Assistant: TOOL_CALL: {{"name": "web_search", "arguments": {{"query": "latest AI news 2026"}}}}
+
+User: "What time is it?"
 Assistant: TOOL_CALL: {{"name": "get_current_time", "arguments": {{}}}}
+
+User: "Generate a report about our sales"
+Assistant: TOOL_CALL: {{"name": "generate_report", "arguments": {{"title": "Sales Summary", "content": "Company sales report for July 2026"}}}}
 
 ═══ AVAILABLE TOOLS ═══
 {tools}
