@@ -229,3 +229,49 @@ async def read_image(image: str, question: str = "") -> str:
         return result
     except Exception as e:
         return f"Error analyzing image: {e}"
+
+
+@registry.register(
+    description="Get current weather for any city worldwide.",
+    parameters={"city": {"type": "str", "description": "City name (e.g. 'Riyadh', 'Dubai', 'London')"}},
+)
+async def get_weather(city: str) -> str:
+    """Get weather from wttr.in (no API key needed)."""
+    import httpx
+    try:
+        url = f"https://wttr.in/{city}?format=%C+%t+%h+%w"
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url)
+            if r.status_code == 200:
+                text = r.text.strip()
+                return f"🌤 طقس {city}: {text}"
+            return f"Could not get weather for '{city}'."
+    except Exception as e:
+        return f"Weather error: {e}"
+
+
+@registry.register(
+    description="Get current currency exchange rate between two currencies.",
+    parameters={
+        "from_currency": {"type": "str", "description": "Source currency code (e.g. 'USD', 'SAR')"},
+        "to_currency": {"type": "str", "description": "Target currency code (e.g. 'SAR', 'EUR', 'TRY')"},
+    },
+)
+async def get_currency_rate(from_currency: str, to_currency: str) -> str:
+    """Get exchange rate from free API."""
+    import httpx
+    try:
+        from_currency = from_currency.upper()[:3]
+        to_currency = to_currency.upper()[:3]
+        url = f"https://api.exchangerate-api.com/v4/latest/{from_currency}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url)
+            if r.status_code == 200:
+                data = r.json()
+                rate = data["rates"].get(to_currency)
+                if rate:
+                    return f"💰 1 {from_currency} = {rate:.4f} {to_currency}"
+                return f"Currency '{to_currency}' not found."
+            return f"Could not get exchange rate."
+    except Exception as e:
+        return f"Currency error: {e}"
