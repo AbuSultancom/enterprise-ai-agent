@@ -132,7 +132,7 @@ STR = {
         "tg_ok": "تلغرام",
         "enable_accounting": "ربط قاعدة بيانات المحاسبة الآن؟",
         "acc_skip": "تم التجاهل. اضبط ACCOUNTING_DB_URL في .env لاحقاً",
-        "acc_host": "خادم SQL Server",
+        "acc_host": "الخادم (host/IP)",
         "acc_port": "المنفذ",
         "acc_db": "اسم قاعدة البيانات",
         "acc_user": "مستخدم DB (للقراءة فقط!)",
@@ -141,6 +141,21 @@ STR = {
         "acc_server_fail": "لا يمكن الوصول إلى الخادم — تم الحفظ على أي حال",
         "acc_warn": "عدل أسماء الجداول في connectors/accounting.py حسب هيكل Onyx لديك",
         "acc_ok": "تم حفظ اتصال المحاسبة",
+        "acc_db_type_prompt": "اختر نوع قاعدة البيانات:",
+        "acc_db_sqlserver": "🟦 SQL Server — Onyx Pro، أنظمة Microsoft ERP",
+        "acc_db_oracle": "🟥 Oracle — مستخدمي Toad، Oracle Database",
+        "acc_db_mysql": "🟩 MySQL — تطبيقات الويب، CMS، التجارة الإلكترونية",
+        "acc_db_postgresql": "🟨 PostgreSQL — تطبيقات الويب الحديثة، التحليلات",
+        "acc_db_direct": "⬜ رابط مباشر — أي رابط SQLAlchemy متوافق",
+        "acc_service_name": "اسم الخدمة (مثال: ORCL, XE)",
+        "acc_db_name": "اسم قاعدة البيانات",
+        "acc_direct_url": "رابط الاتصال الكامل",
+        "acc_display_name": "اسم العرض (للتسمية)",
+        "acc_add_another": "إضافة قاعدة بيانات أخرى؟",
+        "acc_saved_multi": "تم حفظ {} قاعدة بيانات في config/accounting_schema.json",
+        "acc_db_number": "قاعدة بيانات",
+        "acc_url_built": "رابط الاتصال:",
+        "acc_discover_schema": "اكتشاف هيكل الجداول تلقائياً؟",
         "perm_web": "السماح بالبحث في الويب؟",
         "perm_calc": "السماح بالآلة الحاسبة؟",
         "perm_time": "السماح بالتاريخ والوقت؟",
@@ -241,7 +256,7 @@ STR = {
         "tg_ok": "Telegram",
         "enable_accounting": "Connect the accounting database now?",
         "acc_skip": "Skipped. Set ACCOUNTING_DB_URL in .env later.",
-        "acc_host": "SQL Server host/IP",
+        "acc_host": "Server (hostname or IP)",
         "acc_port": "Port",
         "acc_db": "Database name",
         "acc_user": "DB user (read-only!)",
@@ -250,6 +265,21 @@ STR = {
         "acc_server_fail": "Cannot reach server — saved anyway; check network/firewall",
         "acc_warn": "Adapt table names in connectors/accounting.py to your Onyx schema.",
         "acc_ok": "Accounting connection string saved.",
+        "acc_db_type_prompt": "Choose the database type:",
+        "acc_db_sqlserver": "🟦 SQL Server — Onyx Pro, Microsoft ERPs",
+        "acc_db_oracle": "🟥 Oracle — Toad users, Oracle Database",
+        "acc_db_mysql": "🟩 MySQL — Web apps, CMS, e-commerce",
+        "acc_db_postgresql": "🟨 PostgreSQL — Modern web apps, analytics",
+        "acc_db_direct": "⬜ Direct URL — Any SQLAlchemy-compatible string",
+        "acc_service_name": "Service name (e.g. ORCL, XE)",
+        "acc_db_name": "Database name",
+        "acc_direct_url": "Full connection string",
+        "acc_display_name": "Display name (label)",
+        "acc_add_another": "Add another database?",
+        "acc_saved_multi": "Saved {} database(s) to config/accounting_schema.json",
+        "acc_db_number": "Database",
+        "acc_url_built": "Connection URL:",
+        "acc_discover_schema": "Auto-discover table schema?",
         "perm_web": "Allow web search?",
         "perm_calc": "Allow calculator?",
         "perm_time": "Allow date/time?",
@@ -646,68 +676,135 @@ def step_channels(env: dict, settings: dict) -> None:
         settings["channels"]["telegram"] = {"enabled": False}
 
 
+# ─── Database Help Box ────────────────────────────────────────────
+def _db_help_box() -> None:
+    """Show a helpful database connection guide before asking for details."""
+    w = 64
+    print(box_top(w))
+    print(box_line(color("  DATABASE CONNECTION GUIDE  |  دليل ربط قاعدة البيانات", "bold", "yellow"), w))
+    print(box_mid(w))
+    print(box_line(color("  🟦 SQL Server   ", "cyan", "bold") + "— Onyx Pro, Microsoft ERP systems", w))
+    print(box_line("     Find connection in SSMS > Server Properties > Connection", w))
+    print(box_line(color("  🟥 Oracle       ", "red", "bold") + "— Oracle DB / Toad users", w))
+    print(box_line("     Toad > Session > New Connection > Direct tab", w))
+    print(box_line("     OR check tnsnames.ora at C:\\app\\oracle\\product\\...\\Network\\Admin", w))
+    print(box_line(color("  🟩 MySQL        ", "green", "bold") + "— Web apps, CMS, e-commerce", w))
+    print(box_line("     Find connection in app config file or .env", w))
+    print(box_line(color("  🟨 PostgreSQL   ", "yellow", "bold") + "— Modern web apps, analytics", w))
+    print(box_line("     Find connection in app config file or .env", w))
+    print(box_line(color("  ⬜ Direct URL   ", "dim") + "— Any SQLAlchemy-compatible connection", w))
+    print(box_line("     Paste the full connection string directly", w))
+    print(box_bot(w))
+    print()
+
+
 def step_accounting(env: dict, settings: dict) -> None:
     section(5, L["steps"][4])
     if maybe_skip(5, L["step_titles"][4]):
         warn(L["acc_skip"])
         settings["accounting"] = {"enabled": False, "read_only": True}
         return
+
     enabled = ask_yes(L["enable_accounting"], True)
     settings["accounting"] = {"enabled": enabled, "read_only": True}
     if not enabled:
-        warn("سيتم حفظ الإعدادات ولكن بدون تفعيل المحاسبة")
-    # Multi-DB: collect database configs
+        warn(L["acc_skip"])
+        return
+
+    # ── Show the help box ──
+    _db_help_box()
+
     db_configs: list[dict] = []
     db_idx = 1
+    type_map = {0: "mssql", 1: "oracle", 2: "mysql", 3: "postgresql", 4: "direct"}
 
     while True:
         if db_idx > 1:
             print()
-            info(f"📦 Database #{db_idx}")
-        info(L["acc_warn"])
-        host = ask(L["acc_host"], "192.168.1.10")
-        while True:
-            port_raw = ask(L["acc_port"], "1433")
-            if port_raw.isdigit():
-                port = int(port_raw)
-                break
-            fail("❌")
-        db_name = ask(L["acc_db"], "OnyxDB")
-        user = ask(L["acc_user"], "ai_agent_reader")
-        password = ask(L["acc_pass"])
+            info(f"📦 {L.get('acc_db_number', 'Database')} #{db_idx}")
 
-        # Use database name as the key (sanitized)
-        db_key = db_name.lower().replace(" ", "_").replace("-", "_")
-        display_name = ask("Display name (label)", db_name)
-
-        with Spinner(f"Testing {host}:{port}"):
-            reachable, info2 = test_tcp(host, port)
-        if reachable:
-            ok(f"{L['acc_server_ok']} at {host}:{port}")
-        else:
-            warn(f"{L['acc_server_fail']} ({info2})")
-
-        # Ask for database type
-        db_type = ask_choice("نوع قاعدة البيانات / Database type:", [
-            "SQL Server (MSSQL) — Onyx Pro, ERP",
-            "Oracle — Oracle Database",
-            "Other (MySQL, PostgreSQL...)",
+        # ── Step 1: Choose database type FIRST ──
+        db_type = ask_choice(L["acc_db_type_prompt"], [
+            L["acc_db_sqlserver"],
+            L["acc_db_oracle"],
+            L["acc_db_mysql"],
+            L["acc_db_postgresql"],
+            L["acc_db_direct"],
         ])
-        if db_type == 1:  # Oracle
-            service_name = ask("Oracle Service Name (e.g. ORCL, XE)", "ORCL")
-            db_url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service_name}"
-        elif db_type == 2:  # Other
-            db_url = ask("Connection string (full URL)", f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}")
-        else:  # SQL Server (default)
+
+        # ── Step 2: Collect type-specific fields ──
+        if db_type == 0:  # SQL Server
+            info(color("  • SQL Server: host, port (default 1433), database, user, password", "dim"))
+            host = ask(L["acc_host"], "localhost")
+            port = _ask_port(L["acc_port"], "1433")
+            db_name = ask(L["acc_db"], "OnyxDB")
+            user = ask(L["acc_user"], "ai_agent_reader")
+            password = ask(L["acc_pass"])
             db_url = (
                 f"mssql+pyodbc://{user}:{password}@{host}:{port}/{db_name}"
                 "?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
             )
+            display_default = db_name
+
+        elif db_type == 1:  # Oracle
+            info(color("  • Oracle: host, port (default 1521), service_name, user, password", "dim"))
+            host = ask(L["acc_host"], "localhost")
+            port = _ask_port(L["acc_port"], "1521")
+            service_name = ask(L["acc_service_name"], "ORCL")
+            user = ask(L["acc_user"], "ai_agent_reader")
+            password = ask(L["acc_pass"])
+            db_url = f"oracle+oracledb://{user}:{password}@{host}:{port}/?service_name={service_name}"
+            display_default = service_name
+
+        elif db_type == 2:  # MySQL
+            info(color("  • MySQL: host, port (default 3306), database, user, password", "dim"))
+            host = ask(L["acc_host"], "localhost")
+            port = _ask_port(L["acc_port"], "3306")
+            db_name = ask(L["acc_db_name"], "mydb")
+            user = ask(L["acc_user"], "ai_agent_reader")
+            password = ask(L["acc_pass"])
+            db_url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
+            display_default = db_name
+
+        elif db_type == 3:  # PostgreSQL
+            info(color("  • PostgreSQL: host, port (default 5432), database, user, password", "dim"))
+            host = ask(L["acc_host"], "localhost")
+            port = _ask_port(L["acc_port"], "5432")
+            db_name = ask(L["acc_db_name"], "mydb")
+            user = ask(L["acc_user"], "ai_agent_reader")
+            password = ask(L["acc_pass"])
+            db_url = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+            display_default = db_name
+
+        else:  # db_type == 4: Direct URL
+            info(color("  • Direct URL: paste the full SQLAlchemy connection string", "dim"))
+            host, port, user, password = "localhost", 0, "", ""
+            db_url = ask(L["acc_direct_url"], "sqlite:///accounting.db")
+            display_default = "Direct Connection"
+
+        # ── Step 3: TCP reachability test (skip for Direct URL) ──
+        if db_type != 4:
+            with Spinner(f"Testing {host}:{port}"):
+                reachable, info2 = test_tcp(host, port)
+            if reachable:
+                ok(f"{L['acc_server_ok']} at {host}:{port}")
+            else:
+                warn(f"{L['acc_server_fail']} ({info2})")
+
+        # ── Step 4: Show the built URL (mask password) ──
+        if db_type != 4:
+            masked = _mask_password(db_url, password) if password else db_url
+            info(f"{L.get('acc_url_built', 'URL:')} {color(masked, 'dim')}")
+
+        # ── Step 5: Display name ──
+        display_name = ask(L["acc_display_name"], display_default)
+        db_key = display_name.lower().replace(" ", "_").replace("-", "_")
 
         db_configs.append({
             "key": db_key,
             "name": display_name,
             "db_url": db_url,
+            "type": type_map[db_type],
         })
         ok(f"✅ {display_name} ({db_key})")
 
@@ -716,20 +813,70 @@ def step_accounting(env: dict, settings: dict) -> None:
             env["ACCOUNTING_DB_URL"] = db_url
 
         print()
-        # Ask to add another
-        if db_idx >= 1 and not ask_yes("Add another database? / هل تريد إضافة قاعدة بيانات أخرى؟", False):
+        if not ask_yes(L["acc_add_another"], False):
             break
         db_idx += 1
 
+    # ── Save config ──
     settings["accounting"]["allowed_queries"] = [
         "sales_summary", "revenue_by_month", "top_customers",
         "expenses_summary", "invoice_lookup", "cash_balance",
         "vendor_balances", "sales_by_item",
     ]
 
-    # Save multi-DB config
     if db_configs:
-        from connectors.accounting import SchemaConfig, _save_multi_db_config, DEFAULT_SCHEMA
+        _save_accounting_schema(db_configs)
+        ok(L["acc_saved_multi"].format(len(db_configs)))
+
+    # ── Optional: schema discovery ──
+    for cfg in db_configs:
+        if ask_yes(L["acc_discover_schema"].replace("?", f" for {cfg['name']}?"), False):
+            with Spinner(f"Discovering schema for {cfg['name']}..."):
+                try:
+                    from connectors.accounting import discover_schema, _load_multi_db_config
+                    discovered = discover_schema(cfg["db_url"])
+                    discovered.name = cfg["name"]
+                    discovered.db_url = cfg["db_url"]
+                    dbs = _load_multi_db_config()
+                    dbs[cfg["key"]] = discovered
+                    from connectors.accounting import _save_multi_db_config as _save
+                    _save(dbs)
+                    found = len(discovered.tables)
+                    if found > 0:
+                        ok(f"{cfg['name']}: {found} table(s) discovered")
+                        for k, v in discovered.tables.items():
+                            info(f"  {v['table']} → {k}")
+                    else:
+                        warn(f"{cfg['name']}: no tables found — using defaults")
+                except ImportError:
+                    warn("SQLAlchemy not installed — using default schema")
+                except Exception as e:
+                    warn(f"Discovery failed: {e}")
+        else:
+            info(f"{cfg['name']}: using default Onyx Pro schema")
+
+    ok(L["acc_ok"])
+
+
+# ─── Accounting helpers ────────────────────────────────────────────
+def _ask_port(prompt: str, default: str) -> int:
+    """Ask for a port number, retrying until valid."""
+    while True:
+        raw = ask(prompt, default)
+        if raw.isdigit():
+            return int(raw)
+        fail("❌")
+
+
+def _mask_password(url: str, password: str) -> str:
+    """Replace the password in a connection URL with ****."""
+    return url.replace(f":{password}@", ":****@")
+
+
+def _save_accounting_schema(db_configs: list[dict]) -> None:
+    """Save database configs to config/accounting_schema.json."""
+    try:
+        from connectors.accounting import SchemaConfig, _save_multi_db_config
         databases = {}
         for cfg in db_configs:
             databases[cfg["key"]] = SchemaConfig(
@@ -739,35 +886,24 @@ def step_accounting(env: dict, settings: dict) -> None:
                 enabled=True,
             )
         _save_multi_db_config(databases)
-        ok(f"📝 Saved {len(db_configs)} database(s) to config/accounting_schema.json")
-
-    # Schema discovery for each DB
-    for cfg in db_configs:
-        if ask_yes(f"🔄 Auto-discover schema for {cfg['name']}? / اكتشاف هيكل {cfg['name']}؟", True):
-            with Spinner(f"Discovering schema for {cfg['name']}..."):
-                try:
-                    from connectors.accounting import discover_schema, _load_multi_db_config
-                    discovered = discover_schema(cfg["db_url"])
-                    discovered.name = cfg["name"]
-                    discovered.db_url = cfg["db_url"]
-                    dbs = _load_multi_db_config()
-                    dbs[cfg["key"]] = discovered
-                    _save_multi_db_config(dbs)
-                    found = len(discovered.tables)
-                    if found > 0:
-                        ok(f"{cfg['name']}: تم اكتشاف {found} جدول")
-                        for k, v in discovered.tables.items():
-                            info(f"  {v['table']} → {k}")
-                    else:
-                        warn(f"{cfg['name']}: لم يتم العثور على جداول")
-                except ImportError:
-                    warn("SQLAlchemy غير مثبت - جارٍ استخدام التكوين الافتراضي")
-                except Exception as e:
-                    warn(f"فشل الاكتشاف: {e}")
-        else:
-            info(f"{cfg['name']}: تم استخدام التكوين الافتراضي (Onyx Pro)")
-
-    ok(L["acc_ok"])
+    except ImportError:
+        # Fallback: write JSON directly
+        import json as _json
+        config_dir = os.path.join(ROOT, "config")
+        os.makedirs(config_dir, exist_ok=True)
+        schema_path = os.path.join(config_dir, "accounting_schema.json")
+        db_dict = {}
+        for cfg in db_configs:
+            db_dict[cfg["key"]] = {
+                "version": 1,
+                "name": cfg["name"],
+                "db_url": cfg["db_url"],
+                "enabled": True,
+                "tables": {},
+            }
+        config = {"version": 2, "databases": db_dict}
+        with open(schema_path, "w", encoding="utf-8") as f:
+            _json.dump(config, f, indent=2, ensure_ascii=False)
 
 
 def step_permissions(env: dict, settings: dict) -> None:
