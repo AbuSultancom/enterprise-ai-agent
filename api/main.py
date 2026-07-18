@@ -83,7 +83,16 @@ def audit(event: str, role: str, detail: dict) -> None:
         pass
 
 
-app = FastAPI(title="Enterprise AI Agent Platform", version="0.5.0")
+app = FastAPI(
+    title="Enterprise AI Agent API — منصة وكيل الذكاء الاصطناعي للمؤسسات",
+    description="""منصة وكيل ذكاء اصطناعي للمؤسسات — API للمحادثة، البحث، المحاسبة، إدارة المعرفة، والتقارير.
+
+Enterprise AI Agent Platform — Chat, search, accounting, knowledge management, and reporting API.""",
+    version="0.5.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
 gateway = LLMGateway()
 store = KnowledgeStore()
 conv_store = get_conv_store()
