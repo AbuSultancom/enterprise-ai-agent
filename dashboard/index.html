@@ -777,13 +777,15 @@ async function loadConv(id){
   msgs.innerHTML='<div class="msg thinking"><div class="thinking-dots"><span></span><span></span><span></span></div></div>';
   try{
     const res=await api('/v1/conversations/'+id);
+    if(!res.ok){console.error('API error:',res.status);throw new Error(res.status)}
     const data=await res.json();
-    document.getElementById('convName').textContent=data.title;
+    if(!data.messages){console.error('No messages in response:',data);throw new Error('no messages')}
+    document.getElementById('convName').textContent=data.title||'Conversation';
     msgs.innerHTML='';
     data.messages.forEach(m=>addMsg(m.role,m.content));
     msgs.scrollTop=msgs.scrollHeight;
     loadConvs();
-  }catch(e){msgs.innerHTML='';document.getElementById('welcome').style.display='flex'}
+  }catch(e){console.error('loadConv failed:',e);msgs.innerHTML='<div style="text-align:center;padding:30px;color:var(--danger)">⚠️ خطأ في تحميل المحادثة: '+e.message+'</div>';document.getElementById('welcome').style.display='none'}
 }
 
 async function deleteConv(id){
