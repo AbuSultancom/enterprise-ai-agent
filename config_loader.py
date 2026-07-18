@@ -12,6 +12,11 @@ import os
 SETTINGS_PATH = os.getenv("SETTINGS_PATH", "config/settings.json")
 
 DEFAULTS: dict = {
+    "agent": {
+        "name": "Enterprise AI Agent",
+        "language": "auto",   # auto | ar | en — language the agent answers in
+        "personality": "a professional, concise enterprise assistant",
+    },
     "permissions": {
         "web_search": True,
         "calculator": True,
@@ -44,6 +49,7 @@ def load_settings() -> dict:
             merged = {**DEFAULTS, **user}
             merged["permissions"] = {**DEFAULTS["permissions"], **user.get("permissions", {})}
             merged["accounting"] = {**DEFAULTS["accounting"], **user.get("accounting", {})}
+            merged["agent"] = {**DEFAULTS["agent"], **user.get("agent", {})}
             return merged
         except (json.JSONDecodeError, OSError):
             pass
@@ -66,3 +72,7 @@ def allowed_accounting_queries() -> list[str]:
 
 def knowledge_rag_enabled() -> bool:
     return settings["permissions"].get("knowledge_rag", True)
+
+
+def agent_identity() -> dict:
+    return settings.get("agent", DEFAULTS["agent"])
