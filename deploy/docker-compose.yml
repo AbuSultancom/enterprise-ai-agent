@@ -32,6 +32,7 @@ services:
       USER_KEY: "${USER_KEY:-dev-user-key}"
       BOT_PREFIX: "${BOT_PREFIX:-}"
       IGNORE_GROUPS: "${IGNORE_GROUPS:-true}"
+      ALLOWED_NUMBERS: "${ALLOWED_NUMBERS:-}"
       WA_DATA_PATH: "/data/.wwebjs_auth"
     volumes:
       - whatsapp-session:/data
