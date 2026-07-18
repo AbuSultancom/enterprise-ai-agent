@@ -986,53 +986,63 @@ async function showHealth(){
   el.innerHTML='<p>'+t('loading')+'...</p>';
   try{
     const h=await api('/health');const health=await h.json();
-    let tools=[],acc=null,kb=[];
-    try{const t=await api('/v1/tools');tools=await t.json()}catch(e){}
-    try{const a=await api('/v1/accounting/health');acc=await a.json()}catch(e){}
-    try{const k=await api('/v1/knowledge');kb=await k.json()}catch(e){}
+    const tools=health.tools||[];
+    const convs=health.conversations||0;
+    const kbd=health.knowledge_docs||0;
+    const sys=health.system||{};
+    const chan=health.channels||{};
+    const ver=health.version||'?';
     el.innerHTML=`
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0">
-        <div style="background:var(--bg3);padding:12px;border-radius:8px;text-align:center">
-          <div style="font-size:1.5rem">${health.status==='ok'?'✅':'❌'}</div>
-          <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">${t('status_'+(health.status==='ok'?'ok':'error'))}</div>
+      <div style="text-align:center;margin-bottom:12px">
+        <span style="font-size:0.7rem;opacity:0.5">v${ver}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0">
+        <div style="background:var(--bg3);padding:10px 6px;border-radius:8px;text-align:center">
+          <div style="font-size:1.3rem">${health.status==='ok'?'✅':'❌'}</div>
+          <div style="font-size:0.65rem;color:var(--fg2);margin-top:2px">${t('status_'+(health.status==='ok'?'ok':'error'))}</div>
         </div>
-        <div style="background:var(--bg3);padding:12px;border-radius:8px;text-align:center">
-          <div style="font-size:1.5rem;color:var(--accent)">${health.tools||0}</div>
-          <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">${t('tools_count')||'أدوات'}</div>
+        <div style="background:var(--bg3);padding:10px 6px;border-radius:8px;text-align:center">
+          <div style="font-size:1.3rem;color:var(--accent)">${health.tools_count||0}</div>
+          <div style="font-size:0.65rem;color:var(--fg2);margin-top:2px">${t('tools_label')||'Tools'}</div>
+        </div>
+        <div style="background:var(--bg3);padding:10px 6px;border-radius:8px;text-align:center">
+          <div style="font-size:1.3rem;color:var(--success)">${convs}</div>
+          <div style="font-size:0.65rem;color:var(--fg2);margin-top:2px">${lang==='ar'?'محادثات':'Chats'}</div>
+        </div>
+        <div style="background:var(--bg3);padding:10px 6px;border-radius:8px;text-align:center">
+          <div style="font-size:1.3rem;color:var(--warning)">${kbd}</div>
+          <div style="font-size:0.65rem;color:var(--fg2);margin-top:2px">${lang==='ar'?'مستندات':'Docs'}</div>
         </div>
       </div>
-      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0;font-size:0.8rem">
         <strong>🧠 ${t('tab_model')}</strong>
-        <div style="font-size:0.8rem;color:var(--fg2);margin-top:4px">
-          Ollama: ${health.providers?.ollama?'✅':'❌'} | OpenAI: ${health.providers?.openai?'✅':'❌'}
-          ${health.providers?.ollama?'<br>Ollama: <span style="color:var(--success)">'+t('status_ok')+'</span>':''}
+        <div style="color:var(--fg2);margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <span>Ollama: ${health.providers?.ollama?'✅':'❌'}</span>
+          <span>OpenAI: ${health.providers?.openai?'✅':'❌'}</span>
         </div>
       </div>
-      ${acc?`<div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
-        <strong>🏦 ${t('feat_accounting')||'Accounting'} (${acc.count||0})</strong>
-        <div style="font-size:0.8rem;color:var(--fg2);margin-top:4px">
-          ${(acc.databases||[]).map(db=>
-            `<div style="margin:4px 0;padding:4px 8px;background:var(--bg4);border-radius:4px">
-              ${db.connection?.connected?'✅':'❌'} <strong>${db.name}</strong> (${db.key})
-              ${db.connection?.database?'<br>Server: '+db.connection.database:''}
-              ${db.schema?'<br>Tables: '+Object.keys(db.schema.tables).length:''}
-              ${db.connection?.error?'<br><span style="color:var(--danger)">'+db.connection.error+'</span>':''}
-            </div>`
-          ).join('')||'No databases'}
-          <br><span style="opacity:0.6">Connected: ${acc.available?'✅':'❌'}</span>
-        </div>
-      </div>`:''}
-      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
-        <strong>🛠️ ${t('tools_label')||'Tools'} (${tools.length})</strong>
-        <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">
-          ${tools.map(t=>'<span style="background:var(--bg4);padding:2px 8px;border-radius:4px">'+t.name+'</span>').join('')}
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0;font-size:0.8rem">
+        <strong>📡 ${lang==='ar'?'القنوات':'Channels'}</strong>
+        <div style="color:var(--fg2);margin-top:4px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <span>WhatsApp: ${chan.whatsapp?'✅':'❌'}</span>
+          <span>Telegram: ${chan.telegram?'✅':'❌'}</span>
         </div>
       </div>
-      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0">
-        <strong>📚 ${t('kb_title')} (${kb.length})</strong>
-        <div style="font-size:0.75rem;color:var(--fg2);margin-top:4px">
-          ${kb.length?kb.map(d=>'📄 '+d.title).join('<br>'):t('kb_empty')}
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0;font-size:0.8rem">
+        <strong>💻 ${lang==='ar'?'النظام':'System'}</strong>
+        <div style="color:var(--fg2);margin-top:4px;line-height:1.6">
+          Python: ${sys.python||'?'}<br>
+          Platform: ${(sys.platform||'').substring(0,50)}<br>
         </div>
+      </div>
+      <div style="background:var(--bg3);padding:12px;border-radius:8px;margin:8px 0;font-size:0.8rem">
+        <strong>🛠️ ${lang==='ar'?'الأدوات المتاحة':'Available Tools'} (${tools.length})</strong>
+        <div style="color:var(--fg3);margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;max-height:120px;overflow-y:auto">
+          ${tools.map(t=>'<span style="background:var(--bg4);padding:1px 6px;border-radius:3px;font-size:0.65rem">'+t.name+'</span>').join(' ')}
+        </div>
+      </div>
+    `;
+  }catch(e){el.innerHTML='<p style="color:var(--danger)">'+t('status_error')+' ('+e.message+')</p>'}
       </div>
     `;
   }catch(e){el.innerHTML='<p style="color:var(--danger)">'+t('status_error')+'</p>'}

@@ -113,8 +113,46 @@ async def _with_knowledge(message: str) -> str:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "providers": await gateway.health(),
-            "tools": len(registry.list()), "accounting_db": accounting_db.available}
+    import platform
+    import datetime
+    import sys
+    tools_list = [{"name": t.name, "description": t.description} for t in registry.list()]
+
+    # System info
+    sys_info = {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "uptime": str(datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "conversations.db")
+        ) if os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "conversations.db")) else 0)) if os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "conversations.db")) else "unknown",
+    }
+
+    # Conversations count
+    conv_count = len(conv_store.list_sessions(limit=1000))
+
+    # Knowledge docs count
+    kb_count = len(store.list())
+
+    # Accounting status
+    acc_info = accounting_db.get_schema_info() if accounting_db.available else None
+    acc_status = accounting_db.test_connection() if accounting_db.available else None
+
+    return {
+        "status": "ok",
+        "version": "0.5.0",
+        "providers": await gateway.health(),
+        "tools_count": len(tools_list),
+        "tools": tools_list,
+        "accounting": acc_status,
+        "accounting_schema": acc_info,
+        "conversations": conv_count,
+        "knowledge_docs": kb_count,
+        "system": sys_info,
+        "channels": {
+            "whatsapp": os.getenv("WHATSAPP_ENABLED", "false") == "true",
+            "telegram": os.getenv("TELEGRAM_ENABLED", "false") == "true",
+        }
+    }
 
 
 @app.post("/v1/chat", dependencies=[Depends(require_role("admin", "user"))])
