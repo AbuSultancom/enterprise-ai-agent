@@ -1,6 +1,7 @@
 """Built-in tools shipped with the platform. Add your own in tools/custom/."""
 from __future__ import annotations
 
+import base64
 import datetime
 import math
 import os
@@ -180,3 +181,51 @@ def read_file(path: str) -> str:
             return f.read()[:8000]
     except Exception as e:
         return f"Error: {e}"
+
+
+@registry.register(
+    description="Analyze an image (invoice, receipt, screenshot, document) through the LLM's vision API. Supports both image URLs and local file paths.",
+    parameters={
+        "image": {"type": "str", "description": "Image URL (https://...) or local file path relative to /data/workspace"},
+        "question": {"type": "str", "description": "Optional: what to ask about the image (default: read and extract all important data)"},
+    },
+)
+async def read_image(image: str, question: str = "") -> str:
+    """Analyze an image using a vision-capable model."""
+    if not question:
+        question = "Read the content of this image in detail and extract all important data visible in it. For invoices/receipts: extract invoice number, date, customer, items, totals, tax, and status. For screenshots: describe what's shown. For documents: transcribe all visible text."
+
+    # Determine if it's a local path or URL
+    is_url = image.startswith(("http://", "https://", "data:"))
+    image_type = "url"
+    image_data = image
+
+    if not is_url:
+        # Try to read as a local file and convert to base64
+        try:
+            base_path = os.getenv("WORKSPACE_PATH", "/data/workspace")
+            abs_path = os.path.normpath(os.path.join(base_path, image))
+            if not os.path.exists(abs_path):
+                # Try the file path as-is
+                abs_path = os.path.normpath(image)
+            if not os.path.exists(abs_path):
+                return f"Error: image file not found at '{image}'"
+            with open(abs_path, "rb") as f:
+                raw = f.read()
+            # Detect MIME type from extension
+            ext = os.path.splitext(abs_path)[1].lower()
+            mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+            mime = mime_map.get(ext, "image/jpeg")
+            image_data = base64.b64encode(raw).decode("utf-8")
+            image_type = f"base64:{mime}"
+        except Exception as e:
+            return f"Error reading local image file: {e}"
+
+    try:
+        from llm_gateway.gateway import LLMGateway
+        gateway = LLMGateway()
+        result = await gateway.chat_vision(question, image_data, image_type)
+        return result
+    except Exception as e:
+        return f"Error analyzing image: {e}"

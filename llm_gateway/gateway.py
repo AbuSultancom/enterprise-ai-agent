@@ -1,6 +1,7 @@
 """Unified LLM gateway: route requests to local (Ollama) or cloud (OpenAI-compatible) providers."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 from dataclasses import dataclass, field
@@ -87,6 +88,55 @@ class OpenAICompatibleProvider(BaseProvider):
             usage=data.get("usage", {}),
         )
 
+    async def chat_vision(self, text: str, image_data: str, image_type: str = "url",
+                          model: str | None = None, max_tokens: int = 2000) -> str:
+        """Send an image + question to a vision-capable model.
+
+        Args:
+            text: The question/prompt about the image.
+            image_data: URL string or base64-encoded image data.
+            image_type: "url" for a direct HTTPS URL, "base64" or "base64:image/png" for
+                        base64 data (may include MIME prefix).
+            model: Vision-capable model name (defaults to VISION_MODEL env, then current model).
+            max_tokens: Max tokens in the response.
+
+        Returns:
+            The model's text response.
+        """
+        model = model or os.getenv("VISION_MODEL") or os.getenv("DEFAULT_MODEL", "gpt-4o")
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        content_parts: list[dict] = []
+        content_parts.append({"type": "text", "text": text})
+
+        if image_type.startswith("base64"):
+            # Extract MIME type if provided as "base64:image/jpeg"
+            parts = image_type.split(":", 1)
+            mime = parts[1] if len(parts) > 1 else "image/jpeg"
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{image_data}"}
+            })
+        else:
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": image_data}
+            })
+
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": content_parts}],
+            "max_tokens": max_tokens,
+            "temperature": 0.2,
+        }
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+        return data["choices"][0]["message"]["content"]
+
 
 class LLMGateway:
     """Single entry point. Picks provider by prefix: 'ollama:model' or 'openai:model'."""
@@ -116,6 +166,23 @@ class LLMGateway:
                 status["ollama"] = False
         status["openai"] = bool(self.providers["openai"].api_key)
         return status
+
+    async def chat_vision(self, text: str, image_data: str, image_type: str = "url",
+                          model: str | None = None, max_tokens: int = 2000) -> str:
+        """Analyze an image through a vision-capable model.
+
+        Args:
+            text: The question or prompt about the image.
+            image_data: URL string or base64-encoded image data.
+            image_type: "url" for a direct HTTPS image URL, "base64" for base64 data.
+            model: Vision model name (defaults to VISION_MODEL env, then DEFAULT_MODEL).
+            max_tokens: Max tokens in the response.
+
+        Returns:
+            The model's text analysis of the image.
+        """
+        provider = self.providers["openai"]
+        return await provider.chat_vision(text, image_data, image_type, model, max_tokens)
 
     # ---- Streaming: yields text deltas as they arrive ----
     async def chat_stream(self, messages: list[Message], model: str | None = None, **kw) -> AsyncGenerator[str, None]:
