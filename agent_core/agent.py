@@ -62,6 +62,14 @@ def _build_system_prompt(tools_desc: str) -> str:
     return prompt
 
 
+def _parse_tool_json(text: str) -> dict:
+    """Parse LLM-generated JSON for tool calls, handling common formatting issues."""
+    import re as _re
+    # Remove trailing commas before closing braces/brackets
+    cleaned = _re.sub(r',\s*([}\]])', r'\1', text)
+    return json.loads(cleaned)
+
+
 class Agent:
     def __init__(self, gateway: LLMGateway, registry: ToolRegistry, max_steps: int = 8):
         self.gateway = gateway
@@ -84,10 +92,16 @@ class Agent:
                 return {"answer": content, "steps": steps, "model": resp.model, "provider": resp.provider}
 
             try:
-                call = json.loads(match.group(1))
+                call = _parse_tool_json(match.group(1))
                 tool_name, args = call["name"], call.get("arguments", {})
-            except (json.JSONDecodeError, KeyError) as e:
-                return {"answer": f"Agent produced an invalid tool call: {e}", "steps": steps}
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                # Try to recover: wrap single-quoted keys
+                try:
+                    fixed = match.group(1).replace("'", '"')
+                    call = _parse_tool_json(fixed)
+                    tool_name, args = call["name"], call.get("arguments", {})
+                except Exception:
+                    return {"answer": f"Agent produced an invalid tool call: {e}", "steps": steps}
 
             tool = self.registry.get(tool_name)
             if tool is None:
@@ -132,10 +146,19 @@ class Agent:
                 return
 
             try:
-                call = json.loads(match.group(1))
+                call = _parse_tool_json(match.group(1))
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                try:
+                    fixed = match.group(1).replace("'", '"')
+                    call = _parse_tool_json(fixed)
+                except Exception:
+                    yield {"type": "token", "text": f"\n(invalid tool call: {e})"}
+                    yield {"type": "done"}
+                    return
+            try:
                 tool_name, args = call["name"], call.get("arguments", {})
-            except (json.JSONDecodeError, KeyError) as e:
-                yield {"type": "token", "text": f"\n(invalid tool call: {e})"}
+            except KeyError as e:
+                yield {"type": "token", "text": f"\n(missing tool name in call)"}
                 yield {"type": "done"}
                 return
 
