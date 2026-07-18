@@ -95,7 +95,7 @@ class ChatRequest(BaseModel):
     use_knowledge: bool = True
     history: list[dict] | None = None
     session_id: str | None = None
-    mode: str = "single"
+    mode: str = "orchestrator"
 
 
 class DocRequest(BaseModel):
@@ -145,9 +145,9 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
     answer = result.get("answer", "")
     conv_store.save_message(session_id, "assistant", answer)
 
-    # Auto-title: rename session after first exchange if still "New conversation"
+    # Auto-title: rename session if still "New conversation"
     sessions = conv_store.list_sessions(limit=1)
-    if sessions and sessions[0]["title"] == "New conversation" and len(req.message) > 10:
+    if sessions and sessions[0]["title"] == "New conversation":
         title = req.message[:60] + ("…" if len(req.message) > 60 else "")
         conv_store.rename_session(session_id, title)
 
@@ -190,6 +190,11 @@ async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin
         full = "".join(answer_parts)
         if full:
             conv_store.save_message(session_id, "assistant", full)
+        # Auto-title for streaming
+        sessions = conv_store.list_sessions(limit=1)
+        if sessions and sessions[0]["title"] == "New conversation":
+            title = req.message[:60] + ("…" if len(req.message) > 60 else "")
+            conv_store.rename_session(session_id, title)
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
