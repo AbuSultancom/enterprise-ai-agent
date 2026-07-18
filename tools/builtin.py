@@ -143,16 +143,24 @@ def calculator(expression: str) -> str:
     parameters={"query": {"type": "str", "description": "Search query"}},
 )
 async def web_search(query: str) -> str:
-    url = "https://api.duckduckgo.com/"
-    params = {"q": query, "format": "json", "no_html": 1}
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(url, params=params)
-        data = r.json()
-    results = [data.get("AbstractText", "")]
-    for topic in data.get("RelatedTopics", [])[:5]:
-        if isinstance(topic, dict) and topic.get("Text"):
-            results.append(topic["Text"])
-    return "\n".join(filter(None, results)) or "No results found."
+    """Search the web and return top results (title + snippet + url)."""
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=8))
+        if not results:
+            return f"No results found for '{query}'."
+        lines = []
+        for r in results:
+            title = r.get("title", "").strip()
+            snippet = r.get("body", "").strip()[:200]
+            url = r.get("href", "")
+            lines.append(f"• {title}\n  {snippet}\n  {url}")
+        return "\n\n".join(lines)
+    except ImportError:
+        return "Search unavailable: duckduckgo_search library not installed."
+    except Exception as e:
+        return f"Search failed: {e}"
 
 
 @registry.register(
