@@ -138,13 +138,84 @@ class OpenAICompatibleProvider(BaseProvider):
         return data["choices"][0]["message"]["content"]
 
 
+class HuggingFaceProvider(BaseProvider):
+    """Hugging Face Inference API — free tier for many models, better rate limits with HF_TOKEN.
+
+    Two endpoints:
+      - /v1/chat/completions  for TGI (Text Generation Inference) servers that expose
+        an OpenAI-compatible endpoint.
+      - /models/{model_name}   fallback: generic HF text-generation API for
+        models that don't expose the chat endpoint.
+    """
+
+    name = "huggingface"
+
+    def __init__(self, base_url: str | None = None, api_key: str | None = None):
+        self.base_url = (base_url or os.getenv(
+            "HF_BASE_URL", "https://api-inference.huggingface.co"
+        )).rstrip("/")
+        self.api_key = api_key or os.getenv("HF_TOKEN", "")
+
+    async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        # Build the prompt from messages (HF text-generation format)
+        prompt_parts = []
+        for m in messages:
+            if m.role == "system":
+                prompt_parts.append(f"[INST] <<SYS>>\n{m.content}\n<</SYS>>\n\n")
+            elif m.role == "user":
+                prompt_parts.append(f"{m.content} [/INST]")
+            elif m.role == "assistant":
+                prompt_parts.append(f"{m.content} </s><s>[INST] ")
+
+        prompt = "".join(prompt_parts) if prompt_parts else messages[-1].content
+
+        payload: dict = {
+            "inputs": prompt,
+            "parameters": {
+                "temperature": kw.get("temperature", 0.3),
+                "max_new_tokens": kw.get("max_tokens", 1024),
+                "return_full_text": False,
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(
+                f"{self.base_url}/models/{model}",
+                json=payload,
+                headers=headers,
+            )
+            r.raise_for_status()
+            data = r.json()
+
+        # Parse HF response — varies by model
+        if isinstance(data, list) and len(data) > 0:
+            generated = data[0].get("generated_text", str(data[0]))
+        elif isinstance(data, dict):
+            generated = data.get("generated_text", str(data))
+        else:
+            generated = str(data)
+
+        return LLMResponse(
+            content=generated,
+            model=model,
+            provider=self.name,
+            usage={},
+        )
+
+
 class LLMGateway:
-    """Single entry point. Picks provider by prefix: 'ollama:model' or 'openai:model'."""
+    """Single entry point. Picks provider by prefix: 'ollama:model',
+    'openai:model', or 'huggingface:model'."""
 
     def __init__(self):
         self.providers: dict[str, BaseProvider] = {
             "ollama": OllamaProvider(),
             "openai": OpenAICompatibleProvider(),
+            "huggingface": HuggingFaceProvider(),
         }
 
     async def chat(self, messages: list[Message], model: str | None = None, **kw) -> LLMResponse:
@@ -208,6 +279,12 @@ class LLMGateway:
                                     yield delta
                             except json.JSONDecodeError:
                                 continue
+        elif provider_name == "huggingface":
+            # HF Inference API does not support streaming natively —
+            # fall back to a single chat call and yield the full response.
+            p = self.providers["huggingface"]
+            result = await p.chat(messages, model_name, **kw)
+            yield result.content
         else:
             p = self.providers["openai"]
             url = f"{p.base_url}/chat/completions"

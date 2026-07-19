@@ -81,6 +81,7 @@ STR = {
         "model_ollama": "Ollama — محلي، مجاني، خصوصي (موصى به)",
         "model_deepseek": "DeepSeek — سحاب، رخيص وقوي",
         "model_openai": "OpenAI — سحاب (GPT-4o...)",
+        "model_huggingface": "Hugging Face — سحاب، نماذج مجانية مفتوحة المصدر",
         "model_other": "نقطة نهاية متوافقة مع OpenAI (Qwen / vLLM...)",
         "ollama_model": "اسم الموديل في Ollama",
         "ollama_url": "رابط Ollama",
@@ -205,6 +206,7 @@ STR = {
         "model_ollama": "Ollama — local, private, free (recommended)",
         "model_deepseek": "DeepSeek — cloud API, cheap & strong",
         "model_openai": "OpenAI — cloud API (GPT-4o etc.)",
+        "model_huggingface": "Hugging Face — cloud, free open-source models",
         "model_other": "Other OpenAI-compatible endpoint (Qwen / vLLM...)",
         "ollama_model": "Ollama model name",
         "ollama_url": "Ollama URL",
@@ -559,6 +561,7 @@ def step_model(env: dict, settings: dict) -> None:
         L["model_ollama"],
         L["model_deepseek"],
         L["model_openai"],
+        L["model_huggingface"],
         L["model_other"],
     ])
     if choice == 0:
@@ -570,10 +573,28 @@ def step_model(env: dict, settings: dict) -> None:
             ok(f"{L['ollama_check_ok']} ({info})")
         else:
             warn(f"{L['ollama_check_fail']} ({info})")
+    elif choice == 3:
+        # Hugging Face
+        env["HF_TOKEN"] = ask(L["api_key"])
+        env["DEFAULT_MODEL"] = "huggingface:" + ask(
+            L["model_name"], "mistralai/Mistral-7B-Instruct-v0.3"
+        )
+        if env["HF_TOKEN"]:
+            with Spinner(L["api_check_ok"]):
+                good, info = test_http(
+                    "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+                    {"Authorization": f"Bearer {env['HF_TOKEN']}"},
+                )
+            if good:
+                ok(f"{L['api_check_ok']} ({info})")
+            else:
+                warn(L["api_check_fail"])
+        else:
+            warn("No HF_TOKEN — rate limits will be low. Get a free token at https://huggingface.co/settings/tokens")
     else:
         presets = {1: ("https://api.deepseek.com/v1", "deepseek-chat"),
                     2: ("https://api.openai.com/v1", "gpt-4o-mini"),
-                    3: ("", "")}
+                    4: ("", "")}
         base, model = presets[choice]
         env["OPENAI_BASE_URL"] = ask(L["api_base"], base)
         env["OPENAI_API_KEY"] = ask(L["api_key"])

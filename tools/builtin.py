@@ -660,6 +660,43 @@ async def break_even(fixed_costs: float, variable_cost_per_unit: float, selling_
 # ─── Employee Directory ──────────────────────────────────────────
 from tools.directory import search_employee as _search_emp, add_employee as _add_emp
 
+# ─── Hugging Face Tools ──────────────────────────────────────────
+from tools.huggingface import translate_text as _hf_translate
+from tools.huggingface import summarize_text as _hf_summarize
+from tools.huggingface import analyze_sentiment as _hf_sentiment
+
+
+@registry.register(
+    description="Translate text between Arabic and English. Auto-detects direction — use for Arabic↔English translation.",
+    parameters={
+        "text": {"type": "str", "description": "Text to translate"},
+        "source_lang": {"type": "str", "description": "Source language: 'ar' or 'en' (empty = auto-detect)", "default": ""},
+    },
+)
+async def translate_text(text: str, source_lang: str = "") -> str:
+    return await _hf_translate(text, source_lang)
+
+
+@registry.register(
+    description="Summarize long text into a concise paragraph. Use for articles, reports, or long messages.",
+    parameters={
+        "text": {"type": "str", "description": "Text to summarize"},
+        "max_length": {"type": "number", "description": "Max summary tokens", "default": 130},
+    },
+)
+async def summarize_text(text: str, max_length: float = 130) -> str:
+    return await _hf_summarize(text, max_length)
+
+
+@registry.register(
+    description="Analyze sentiment of text (positive, negative, neutral). Use to gauge tone of messages, reviews, or feedback.",
+    parameters={
+        "text": {"type": "str", "description": "Text to analyze"},
+    },
+)
+async def analyze_sentiment(text: str) -> str:
+    return await _hf_sentiment(text)
+
 @registry.register(
     description="Search employees by name, department, role, or phone. Use when asked about employee contact info, \"رقم فلان\", or \"من يعمل في قسم كذا\".",
     parameters={"query": {"type": "str", "description": "Search term (name, department, role, phone) — empty for all employees"}}
