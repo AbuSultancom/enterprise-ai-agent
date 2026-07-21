@@ -39,6 +39,7 @@ ACCOUNTING_TOOLS: set[str] = {
     "get_cash_balance",
     "get_vendor_balances",
     "get_sales_by_item",
+    "generate_chart",
     "calculator",
 }
 
@@ -46,7 +47,14 @@ REPORT_TOOLS: set[str] = {
     "generate_report",
     "list_reports",
     "search_conversations",
+    "search_knowledge_base",
     "get_current_time",
+    "generate_chart",
+    "calculator",
+}
+
+KNOWLEDGE_TOOLS: set[str] = {
+    "search_knowledge_base",
     "calculator",
 }
 
@@ -79,6 +87,9 @@ _ROUTING_RULES: list[tuple[list[str], str]] = [
     (["generate report", "save report", "list report", "report generation",
       "create report", "write report", "make report",
       "report", "تقرير", "تقارير", "سوي", "انشئ", "اعمل"], "report"),
+    # Knowledge — searching policies, manuals, docs, or knowledge base
+    (["policy", "manual", "guide", "procedure", "document", "knowledge base", "rag",
+      "files", "search docs", "سياسة", "شروط", "ملف", "دليل", "مستند", "مستندات", "موسوعة"], "knowledge"),
     # WebSearch — anything about searching the web, weather, currency
     (["web search", "look up online", "find online", "search online",
       "exchange rate", "currency rate",
@@ -98,7 +109,7 @@ _ROUTING_RULES: list[tuple[list[str], str]] = [
 def route_request(user_input: str) -> str:
     """Determine the best sub-agent for the given input using keyword matching.
 
-    Returns one of: "websearch", "accounting", "report", "general".
+    Returns one of: "websearch", "accounting", "report", "knowledge", "general".
     """
     lower = user_input.lower()
     for keywords, agent_name in _ROUTING_RULES:
@@ -113,10 +124,11 @@ def route_request(user_input: str) -> str:
 class OrchestratorAgent:
     """Routes user requests to specialized sub-agents and composes the final answer.
 
-    Delegates to one of four sub-agents:
+    Delegates to one of five sub-agents:
       - WebSearchAgent  (web search, weather, currency, calculator)
-      - AccountingAgent (accounting/ERP queries + calculator)
-      - ReportAgent     (report generation, listing, conversations, time, calc)
+      - AccountingAgent (accounting/ERP queries + chart generation + calculator)
+      - ReportAgent     (report generation, RAG lookup, conversations, time, calc)
+      - KnowledgeAgent  (RAG lookup in company docs + calculator)
       - GeneralAgent    (all tools — fallback when routing is uncertain)
     """
 
@@ -129,6 +141,7 @@ class OrchestratorAgent:
             "websearch": Agent(gateway, _get_sub_registry("web", WEBSEARCH_TOOLS), max_steps),
             "accounting": Agent(gateway, _get_sub_registry("acct", ACCOUNTING_TOOLS), max_steps),
             "report": Agent(gateway, _get_sub_registry("rpt", REPORT_TOOLS), max_steps),
+            "knowledge": Agent(gateway, _get_sub_registry("knw", KNOWLEDGE_TOOLS), max_steps),
             "general": Agent(gateway, main_registry, max_steps),
         }
 

@@ -9,6 +9,8 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>AI Agent — Intelligent Assistant</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 /* === Variables === */
 :root {
@@ -610,6 +612,77 @@ html[dir="rtl"] .conv-item:hover{transform:translateX(-2px)}
 @keyframes think{
   0%,80%,100%{transform:scale(0.6);opacity:0.4}
   40%{transform:scale(1);opacity:1}
+}
+
+/* Markdown & Table styling inside message bubbles */
+.msg table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 0.85rem;
+  background: var(--bg2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+.msg th {
+  background: var(--bg3);
+  color: var(--fg);
+  font-weight: 600;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 2px solid var(--border2);
+}
+.msg td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+}
+.msg tr:last-child td {
+  border-bottom: none;
+}
+.msg tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+.msg ul, .msg ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.msg li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+.msg pre {
+  background: var(--bg);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid var(--border);
+}
+.msg code {
+  font-family: 'Consolas', 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  background: rgba(255,255,255,0.06);
+  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+}
+.msg pre code {
+  background: none;
+  padding: 0;
+}
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  height: 280px;
+  margin: 14px 0;
+  padding: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Input area */
@@ -1597,6 +1670,115 @@ ${msgs.map(m=>`<div class="label">${m.role==='user'?'👤 You':'🤖 Assistant'}
   toast('✅ Chat exported as .'+ext);
 }
 
+// === Chat Markdown & Chart Rendering ===
+function renderContent(content) {
+  let html = content;
+  if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+    html = marked.parse(content);
+  } else {
+    // Simple basic fallback for offline mode
+    html = content
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  }
+
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+
+  // Render chart blocks
+  temp.querySelectorAll('pre code').forEach(codeEl => {
+    const isChart = codeEl.className.includes('json-chart') || 
+                    (codeEl.textContent.trim().startsWith('{') && codeEl.textContent.includes('"data"') && codeEl.textContent.includes('"type"'));
+    if (!isChart) return;
+
+    const preEl = codeEl.parentElement;
+    if (!preEl) return;
+
+    try {
+      const config = JSON.parse(codeEl.textContent.trim());
+      const chartId = 'chart_' + Math.random().toString(36).substr(2, 9);
+      
+      const container = document.createElement('div');
+      container.className = 'chart-container';
+      const canvas = document.createElement('canvas');
+      canvas.id = chartId;
+      container.appendChild(canvas);
+
+      preEl.parentNode.replaceChild(container, preEl);
+
+      setTimeout(() => {
+        if (typeof Chart !== 'undefined') {
+          const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+          const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+          const textColor = isDark ? '#8892b0' : '#4a5568';
+          
+          if (config.data && config.data.datasets) {
+            config.data.datasets.forEach(ds => {
+              ds.backgroundColor = ds.backgroundColor || (config.type === 'pie' || config.type === 'doughnut' 
+                ? ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6'] 
+                : 'rgba(99, 102, 241, 0.85)');
+              ds.borderColor = ds.borderColor || (config.type === 'pie' || config.type === 'doughnut' ? '#0c0e17' : '#6366f1');
+              ds.borderWidth = ds.borderWidth || 1.5;
+            });
+          }
+
+          config.options = config.options || {};
+          config.options.responsive = true;
+          config.options.maintainAspectRatio = false;
+          config.options.scales = config.options.scales || {};
+          
+          if (config.type !== 'pie' && config.type !== 'doughnut') {
+            config.options.scales.x = config.options.scales.x || {
+              grid: { color: gridColor },
+              ticks: { color: textColor }
+            };
+            config.options.scales.y = config.options.scales.y || {
+              grid: { color: gridColor },
+              ticks: { color: textColor }
+            };
+          }
+          if (config.options.plugins && config.options.plugins.title) {
+            config.options.plugins.title.color = textColor;
+            config.options.plugins.title.font = { family: 'Segoe UI', size: 14, weight: '600' };
+          }
+          if (config.options.plugins && config.options.plugins.legend) {
+            config.options.plugins.legend.labels = config.options.plugins.legend.labels || {};
+            config.options.plugins.legend.labels.color = textColor;
+          }
+
+          new Chart(canvas, config);
+        } else {
+          // Plain-text HTML table fallback if Chart.js is not loaded
+          container.innerHTML = `<h4>${config.options?.plugins?.title?.text || 'Data Chart'}</h4>`;
+          const table = document.createElement('table');
+          const thRow = document.createElement('tr');
+          thRow.innerHTML = '<th>Category</th><th>Value</th>';
+          table.appendChild(thRow);
+          
+          const labels = config.data?.labels || [];
+          const data = config.data?.datasets?.[0]?.data || [];
+          for (let i = 0; i < Math.max(labels.length, data.length); i++) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${labels[i] || '-'}</td><td>${data[i] !== undefined ? data[i] : '-'}</td>`;
+            table.appendChild(tr);
+          }
+          container.style.height = 'auto';
+          container.appendChild(table);
+        }
+      }, 50);
+
+    } catch (e) {
+      console.error('Failed to parse json-chart:', e);
+    }
+  });
+
+  return temp.innerHTML;
+}
+
 // === Chat ===
 function addMsg(role,content,timestamp){
   const msgs=document.getElementById('messages');
@@ -1612,7 +1794,7 @@ function addMsg(role,content,timestamp){
   const timeDisplay = timeAgo(ts);
   const timeFull = timestamp ? new Date(ts).toLocaleTimeString(lang==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'}) : new Date().toLocaleTimeString(lang==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'});
 
-  div.innerHTML = content.replace(/\n/g,'<br>') +
+  div.innerHTML = renderContent(content) +
     '<div class="msg-time"><span title="'+timeFull+'">'+timeDisplay+'</span>' +
     (role==='agent'?'<button class="copy-btn" onclick="copyMsg(this)" title="نسخ">📋 نسخ</button>':'') +
     '</div>';
@@ -1626,6 +1808,10 @@ function copyMsg(btn){
   const clone = msgDiv.cloneNode(true);
   const timeEl = clone.querySelector('.msg-time');
   if (timeEl) timeEl.remove();
+  
+  // Also remove chart elements before copying text
+  clone.querySelectorAll('.chart-container').forEach(c => c.remove());
+  
   const text = clone.textContent.trim();
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = '✅';
@@ -1701,6 +1887,10 @@ async function send(){
         }
       }
     }
+    // Stream completed. Render markdown and charts properly.
+    ansDiv.innerHTML = renderContent(answer) +
+      '<div class="msg-time"><span>'+timeAgo(startTime)+'</span><button class="copy-btn" onclick="copyMsg(this)" title="نسخ">📋 نسخ</button></div>';
+    msgs.scrollTop=msgs.scrollHeight;
   }catch(e){
     // Fallback to non-streaming
     try{

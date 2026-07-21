@@ -799,3 +799,56 @@ async def restart_agent_tool() -> str:
 async def show_config_tool() -> str:
     return await _scc()
 
+
+@registry.register(
+    description="Search the company internal knowledge base (RAG) for uploaded documents, policies, or manuals.",
+    parameters={"query": {"type": "str", "description": "What to search for in the company knowledge base"}},
+)
+async def search_knowledge_base(query: str) -> str:
+    from memory.store import KnowledgeStore
+    from llm_gateway.gateway import LLMGateway
+    store = KnowledgeStore()
+    gateway = LLMGateway()
+    docs = await store.search(query, gateway=gateway)
+    if not docs:
+        return "No documents in the knowledge base match your query."
+    results = []
+    for d in docs:
+        results.append(f"[{d.title}] (ID: {d.id})\n{d.content}")
+    return "\n\n".join(results)
+
+
+@registry.register(
+    description="Generate a visual chart (Bar, Line, Pie, Doughnut) for numerical data. Returns a formatted block that renders dynamically on the user dashboard.",
+    parameters={
+        "title": {"type": "str", "description": "Title of the chart"},
+        "chart_type": {"type": "str", "description": "Type of chart: 'bar', 'line', 'pie', 'doughnut'"},
+        "labels": {"type": "list", "description": "X-axis labels or category names (list of strings)"},
+        "data": {"type": "list", "description": "Y-axis values or numerical data (list of numbers)"},
+        "label": {"type": "str", "description": "Label of the dataset (e.g. 'Revenue', 'Sales')"},
+    },
+)
+def generate_chart(title: str, chart_type: str, labels: list[str], data: list[float], label: str = "Value") -> str:
+    import json
+    chart_config = {
+        "type": chart_type.lower(),
+        "data": {
+            "labels": labels,
+            "datasets": [{
+                "label": label,
+                "data": data
+            }]
+        },
+        "options": {
+            "responsive": True,
+            "plugins": {
+                "title": {
+                    "display": True,
+                    "text": title
+                }
+            }
+        }
+    }
+    return f"Here is the chart:\n\n```json-chart\n{json.dumps(chart_config, indent=2, ensure_ascii=False)}\n```"
+
+
