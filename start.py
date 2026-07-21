@@ -22,6 +22,14 @@ Press Ctrl+C to stop everything.
 """
 from __future__ import annotations
 
+import sys
+# Configure console output to support UTF-8 on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import argparse
 import itertools
 import os
@@ -29,7 +37,6 @@ import random
 import shutil
 import signal
 import subprocess
-import sys
 import threading
 import time
 import webbrowser
@@ -109,20 +116,20 @@ def stop_spin() -> None:
 
 # ── ASCII art tips ──
 TIPS = [
-    "💡 نصيحة: استخدم --dev للتشغيل في وضع التطوير مع التحميل التلقائي",
+    "💡 Tip: Use --dev to run in development mode with auto-reload",
     "💡 Tip: Press Ctrl+C to gracefully stop all services",
     "💡 Tip: Use --port=8080 to change the API port",
     "💡 Tip: Add --no-browser to skip opening the dashboard",
     "💡 Tip: The dashboard auto-refreshes every 30 seconds",
     "💡 Tip: You can switch languages in the dashboard with the EN/ع button",
-    "💡 نصيحة: يمكنك رفع ملفات PDF و Word للبحث فيها من لوحة المعرفة",
+    "💡 Tip: You can upload PDF and Word documents to search in the Knowledge panel",
     "💡 Tip: Type /help in the dashboard for available keyboard shortcuts",
-    "💡 نصيحة: الـ API يدعم البث المباشر (streaming) للردود السريعة",
+    "💡 Tip: The API supports streaming responses for faster replies",
     "💡 Tip: The health endpoint at /health shows system status",
-    "💡 نصيحة: يمكنك تثبيت المحادثات المهمة في أعلى الشريط الجانبي",
+    "💡 Tip: You can pin important conversations to the top of the sidebar",
     "💡 Tip: Dark mode is automatic — toggle between dark, light, and system",
     "💡 Tip: Use Enter to send, Shift+Enter for new line in chat",
-    "💡 نصيحة: جميع المفاتيح مخزنة بأمان في .env ولن تظهر مرة أخرى",
+    "💡 Tip: All API keys are securely stored in .env and will not be displayed again",
 ]
 
 
@@ -507,9 +514,9 @@ def main() -> None:
     # Show tool and conversation counts
     tool_count = count_tools()
     conv_count = count_conversations()
-    info(f"🛠️  {tool_count} أداة متاحة (tools available)")
+    info(f"🛠️  {tool_count} tools available")
     if conv_count:
-        info(f"💬 {conv_count} محادثة سابقة (existing conversations)")
+        info(f"💬 {conv_count} existing conversations")
 
     # ═══════════════════════════════════════════
     #  PHASE 3: Setup

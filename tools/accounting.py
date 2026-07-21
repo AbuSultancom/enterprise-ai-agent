@@ -400,11 +400,11 @@ def get_sales_by_item(start_date: str = "", end_date: str = "", database: str = 
 
 # ─── Multi-Branch Comparison ────────────────────────────────────
 @registry.register(
-    description="Compare sales, revenue, or performance between different company branches. Use when asked to compare branches أو قارن بين الفروع.",
+    description="Compare sales, revenue, or performance between different company branches.",
     parameters={
         "metric": {"type": "str", "description": "What to compare: sales, revenue, profit, employees, invoices"},
         "period": {"type": "str", "description": "Time period: today, this_month, last_month, this_year"},
-        "branches": {"type": "str", "description": "Branch names separated by commas (e.g. الرياض,جدة,الدمام) — empty for all branches"},
+        "branches": {"type": "str", "description": "Branch names separated by commas (e.g. Riyadh,Jeddah,Dammam) — empty for all branches"},
     }
 )
 async def compare_branches(metric: str = "sales", period: str = "this_month", branches: str = "") -> str:
@@ -426,8 +426,8 @@ async def compare_branches(metric: str = "sales", period: str = "this_month", br
         with open(branches_file, encoding="utf-8") as f:
             data = json.load(f)
 
-        requested = [b.strip() for b in branches.split(",") if b.strip()] if branches else [d["name"] for d in data]
-        filtered = [d for d in data if d["name"] in requested]
+        requested = [b.strip().lower() for b in branches.split(",") if b.strip()] if branches else [d["name_en"].lower() for d in data]
+        filtered = [d for d in data if d["name_en"].lower() in requested or d["name"].lower() in requested]
 
         if not filtered:
             return f"No branches found matching: {branches}"
@@ -435,16 +435,16 @@ async def compare_branches(metric: str = "sales", period: str = "this_month", br
         total = sum(d.get(metric, 0) for d in filtered)
         max_b = max(filtered, key=lambda d: d.get(metric, 0))
 
-        lines = [f"📊 مقارنة {metric} — {period} | Branch Comparison\n"]
+        lines = [f"📊 Branch Comparison: {metric} ({period})\n"]
         for b in filtered:
             val = b.get(metric, 0)
             pct = f"{(val/total*100):.1f}%" if total else "0%"
             bar = "█" * int(val / max(max_b.get(metric, 1), 1) * 10)
-            lines.append(f"  🏢 {b[name]} ({b.get(name_en, )}): {val:,} {pct}")
+            lines.append(f"  🏢 {b['name_en']}: {val:,} ({pct})")
             lines.append(f"     {bar}")
 
         lines.append(f"\n  📈 Total {metric}: {total:,}")
-        lines.append(f"  🏆 Best: {max_b[name]} ({max_b.get(metric, 0):,})")
+        lines.append(f"  🏆 Top Branch: {max_b['name_en']} ({max_b.get(metric, 0):,})")
         lines.append(f"  📍 Branches: {len(filtered)}")
 
         return "\n".join(lines)

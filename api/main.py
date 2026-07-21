@@ -84,10 +84,8 @@ def audit(event: str, role: str, detail: dict) -> None:
 
 
 app = FastAPI(
-    title="Enterprise AI Agent API — منصة وكيل الذكاء الاصطناعي للمؤسسات",
-    description="""منصة وكيل ذكاء اصطناعي للمؤسسات — API للمحادثة، البحث، المحاسبة، إدارة المعرفة، والتقارير.
-
-Enterprise AI Agent Platform — Chat, search, accounting, knowledge management, and reporting API.""",
+    title="Enterprise AI Agent API",
+    description="""Enterprise AI Agent Platform — API for chat, search, accounting, knowledge management, and reporting.""",
     version="0.5.0",
     docs_url="/docs",
     redoc_url="/redoc",

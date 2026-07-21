@@ -244,7 +244,7 @@ async def get_weather(city: str) -> str:
             r = await client.get(url)
             if r.status_code == 200:
                 text = r.text.strip()
-                return f"🌤 طقس {city}: {text}"
+                return f"🌤 Weather for {city}: {text}"
             return f"Could not get weather for '{city}'."
     except Exception as e:
         return f"Weather error: {e}"
@@ -283,9 +283,9 @@ async def get_currency_rate(from_currency: str, to_currency: str) -> str:
 
 
 @registry.register(
-    description="الحصول على سعر سهم سعودي من Argaam/Tadawul — احصل على السهم (مثل 1120 للراجحي)",
+    description="Get current stock price of a Saudi company from Argaam/Tadawul by stock symbol (e.g. '1120' for Al Rajhi).",
     parameters={
-        "symbol": {"type": "str", "description": "رمز السهم (مثل 1120 لألراجحي)"},
+        "symbol": {"type": "str", "description": "Stock symbol (e.g. '1120' for Al Rajhi)"},
     },
 )
 async def tasi_stocks(symbol: str) -> str:
@@ -305,7 +305,7 @@ async def tasi_stocks(symbol: str) -> str:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 })
                 if r.status_code != 200:
-                    return f"⚠️ تعذر الحصول على بيانات السهم {symbol}. قد يكون الرمز غير صحيح."
+                    return f"⚠️ Could not retrieve stock data for {symbol}. The symbol might be incorrect."
             text = r.text
             # Try to extract price from page
             import re
@@ -315,21 +315,21 @@ async def tasi_stocks(symbol: str) -> str:
                 price = price_match.group(1)
                 change = change_match.group(1) if change_match else "N/A"
                 return (
-                    f"📈 سهم {symbol}\n"
-                    f"السعر: {price} ريال\n"
-                    f"التغير: {change}\n"
-                    f"(المصدر: Argaam)"
+                    f"📈 Stock {symbol}\n"
+                    f"Price: {price} SAR\n"
+                    f"Change: {change}\n"
+                    f"(Source: Argaam)"
                 )
-            return f"📊 تم استرداد بيانات السهم {symbol} بنجاح (تعذر استخراج السعر من الصفحة)."
+            return f"📊 Stock data for {symbol} retrieved successfully (could not extract price from page)."
     except Exception as e:
-        return f"⚠️ خطأ في جلب بيانات السهم {symbol}: {e}"
+        return f"⚠️ Error fetching stock price for {symbol}: {e}"
 
 
 @registry.register(
-    description="حاسبة ضريبة القيمة المضافة 15% — حساب ضريبة القيمة المضافة السعودية",
+    description="Calculate Saudi Value Added Tax (VAT) at 15%.",
     parameters={
-        "amount": {"type": "number", "description": "المبلغ بالريال"},
-        "inclusive": {"type": "bool", "description": "هل المبلغ شامل الضريبة؟ (True = استخراج الضريبة, False = إضافة الضريبة)",
+        "amount": {"type": "number", "description": "Amount in SAR"},
+        "inclusive": {"type": "bool", "description": "Whether the amount already includes VAT (True to extract VAT, False to add VAT)",
                        "default": False},
     },
 )
@@ -348,88 +348,88 @@ async def vat_calc(amount: float, inclusive: bool = False) -> str:
             vat = amount * rate
             total = amount + vat
         return (
-            f"🧾 حاسبة ضريبة القيمة المضافة (15%)\n"
+            f"🧾 Value Added Tax (VAT) Calculator (15%)\n"
             f"{'─' * 35}\n"
-            f"المبلغ الأصلي:       {original:,.2f} ريال\n"
-            f"قيمة الضريبة (15%):  {vat:,.2f} ريال\n"
+            f"Original Amount:     {original:,.2f} SAR\n"
+            f"VAT Amount (15%):    {vat:,.2f} SAR\n"
             f"{'─' * 35}\n"
-            f"الإجمالي:            {total:,.2f} ريال"
+            f"Total Amount:        {total:,.2f} SAR"
         )
     except Exception as e:
-        return f"⚠️ خطأ في حساب ضريبة القيمة المضافة: {e}"
+        return f"⚠️ Error calculating VAT: {e}"
 
 
 @registry.register(
-    description="حاسبة هامش الربح — حساب الربح وهامش الربح ونسبة الترميز",
+    description="Calculate profit margin, markup, and total profit.",
     parameters={
-        "cost": {"type": "number", "description": "التكلفة (سعر الشراء)"},
-        "selling_price": {"type": "number", "description": "سعر البيع"},
+        "cost": {"type": "number", "description": "Purchase cost"},
+        "selling_price": {"type": "number", "description": "Selling price"},
     },
 )
 async def profit_margin(cost: float, selling_price: float) -> str:
     """Calculate profit margin. Returns profit amount, margin %, and markup %."""
     try:
         if cost <= 0:
-            return "⚠️ التكلفة يجب أن تكون أكبر من صفر."
+            return "⚠️ Cost must be greater than zero."
         profit = selling_price - cost
         margin_pct = (profit / selling_price) * 100
         markup_pct = (profit / cost) * 100
         return (
-            f"📊 حاسبة هامش الربح\n"
+            f"📊 Profit Margin Calculator\n"
             f"{'─' * 35}\n"
-            f"التكلفة:              {cost:,.2f} ريال\n"
-            f"سعر البيع:            {selling_price:,.2f} ريال\n"
+            f"Cost:                 {cost:,.2f} SAR\n"
+            f"Selling Price:        {selling_price:,.2f} SAR\n"
             f"{'─' * 35}\n"
-            f"الربح:                {profit:,.2f} ريال\n"
-            f"هامش الربح:          {margin_pct:.2f}%\n"
-            f"نسبة الترميز:        {markup_pct:.2f}%"
+            f"Profit:               {profit:,.2f} SAR\n"
+            f"Profit Margin:        {margin_pct:.2f}%\n"
+            f"Markup:               {markup_pct:.2f}%"
         )
     except Exception as e:
-        return f"⚠️ خطأ في حساب هامش الربح: {e}"
+        return f"⚠️ Error calculating profit margin: {e}"
 
 
 @registry.register(
-    description="حاسبة العائد على الاستثمار (ROI) — حساب العائد كنسبة مئوية",
+    description="Calculate Return on Investment (ROI) percentage.",
     parameters={
-        "initial_investment": {"type": "number", "description": "قيمة الاستثمار الأولية"},
-        "final_value": {"type": "number", "description": "القيمة النهائية للاستثمار"},
+        "initial_investment": {"type": "number", "description": "Initial investment value"},
+        "final_value": {"type": "number", "description": "Final investment value"},
     },
 )
 async def roi_calc(initial_investment: float, final_value: float) -> str:
     """Return on Investment calculator. Returns ROI percentage and profit/loss."""
     try:
         if initial_investment <= 0:
-            return "⚠️ الاستثمار الأولي يجب أن يكون أكبر من صفر."
+            return "⚠️ Initial investment must be greater than zero."
         profit = final_value - initial_investment
         roi_pct = (profit / initial_investment) * 100
-        status = "ربح 📈" if profit >= 0 else "خسارة 📉"
+        status = "Profit 📈" if profit >= 0 else "Loss 📉"
         return (
-            f"💰 حاسبة العائد على الاستثمار (ROI)\n"
+            f"💰 Return on Investment (ROI) Calculator\n"
             f"{'─' * 35}\n"
-            f"الاستثمار الأولي:      {initial_investment:,.2f} ريال\n"
-            f"القيمة النهائية:       {final_value:,.2f} ريال\n"
+            f"Initial Investment:  {initial_investment:,.2f} SAR\n"
+            f"Final Value:         {final_value:,.2f} SAR\n"
             f"{'─' * 35}\n"
-            f"الربح/الخسارة:        {profit:+,.2f} ريال\n"
-            f"العائد على الاستثمار: {roi_pct:+.2f}%\n"
-            f"الحالة:               {status}"
+            f"Profit/Loss:         {profit:+,.2f} SAR\n"
+            f"ROI Rate:            {roi_pct:+.2f}%\n"
+            f"Status:              {status}"
         )
     except Exception as e:
-        return f"⚠️ خطأ في حساب العائد على الاستثمار: {e}"
+        return f"⚠️ Error calculating ROI: {e}"
 
 
 @registry.register(
-    description="حاسبة القروض والتمويل — حساب القسط الشهري والفائدة الإجمالية",
+    description="Calculate monthly payments, total payment, and total interest for a loan.",
     parameters={
-        "amount": {"type": "number", "description": "مبلغ القرض"},
-        "interest_rate": {"type": "number", "description": "نسبة الفائدة السنوية % (مثال: 5.5)"},
-        "months": {"type": "number", "description": "مدة القرض بالأشهر"},
+        "amount": {"type": "number", "description": "Loan principal amount"},
+        "interest_rate": {"type": "number", "description": "Annual interest rate % (e.g., 5.5)"},
+        "months": {"type": "number", "description": "Loan tenure in months"},
     },
 )
 async def loan_calc(amount: float, interest_rate: float, months: int) -> str:
     """Loan/Financing calculator. Calculates monthly payment, total payment, total interest."""
     try:
         if amount <= 0 or months <= 0:
-            return "⚠️ المبلغ والمدة يجب أن يكونا أكبر من صفر."
+            return "⚠️ Loan amount and tenure must be greater than zero."
         monthly_rate = (interest_rate / 100) / 12
         if monthly_rate == 0:
             monthly_payment = amount / months
@@ -438,27 +438,27 @@ async def loan_calc(amount: float, interest_rate: float, months: int) -> str:
         total_payment = monthly_payment * months
         total_interest = total_payment - amount
         return (
-            f"🏦 حاسبة القروض والتمويل\n"
+            f"🏦 Loan & Finance Calculator\n"
             f"{'─' * 35}\n"
-            f"مبلغ القرض:           {amount:,.2f} ريال\n"
-            f"نسبة الفائدة:         {interest_rate:.2f}%\n"
-            f"المدة:                {months} شهر\n"
+            f"Loan Amount:          {amount:,.2f} SAR\n"
+            f"Interest Rate:        {interest_rate:.2f}%\n"
+            f"Duration:             {months} months\n"
             f"{'─' * 35}\n"
-            f"القسط الشهري:         {monthly_payment:,.2f} ريال\n"
-            f"مجموع المدفوعات:      {total_payment:,.2f} ريال\n"
-            f"إجمالي الفائدة:       {total_interest:,.2f} ريال"
+            f"Monthly Payment:      {monthly_payment:,.2f} SAR\n"
+            f"Total Payment:        {total_payment:,.2f} SAR\n"
+            f"Total Interest:       {total_interest:,.2f} SAR"
         )
     except Exception as e:
-        return f"⚠️ خطأ في حساب القرض: {e}"
+        return f"⚠️ Error calculating loan details: {e}"
 
 
 @registry.register(
-    description="حاسبة الزكاة — حساب الزكاة بنسبة 2.5% على النقد والذهب والأسهم",
+    description="Calculate Zakat (2.5% of net wealth) on cash, gold, and stocks.",
     parameters={
-        "cash": {"type": "number", "description": "النقد المتوفر (ريال)", "default": 0},
-        "gold_value": {"type": "number", "description": "قيمة الذهب (ريال)", "default": 0},
-        "stocks_value": {"type": "number", "description": "قيمة الأسهم (ريال)", "default": 0},
-        "debts": {"type": "number", "description": "الديون المستحقة عليك (ريال)", "default": 0},
+        "cash": {"type": "number", "description": "Available cash (SAR)", "default": 0},
+        "gold_value": {"type": "number", "description": "Value of gold owned (SAR)", "default": 0},
+        "stocks_value": {"type": "number", "description": "Value of stocks owned (SAR)", "default": 0},
+        "debts": {"type": "number", "description": "Outstanding debts to subtract (SAR)", "default": 0},
     },
 )
 async def zakat_calc(cash: float = 0, gold_value: float = 0, stocks_value: float = 0, debts: float = 0) -> str:
@@ -469,26 +469,26 @@ async def zakat_calc(cash: float = 0, gold_value: float = 0, stocks_value: float
         zakat_rate = 0.025
         zakat_due = max(0, net_wealth * zakat_rate)
         return (
-            f"🕌 حاسبة الزكاة (2.5%)\n"
+            f"🕌 Zakat Calculator (2.5%)\n"
             f"{'─' * 35}\n"
-            f"النقد:                {cash:,.2f} ريال\n"
-            f"الذهب:                {gold_value:,.2f} ريال\n"
-            f"الأسهم:               {stocks_value:,.2f} ريال\n"
-            f"إجمالي الثروة:        {total_wealth:,.2f} ريال\n"
-            f"الديون:               {debts:,.2f} ريال\n"
-            f"صافي الثروة:          {net_wealth:,.2f} ريال\n"
+            f"Cash:                 {cash:,.2f} SAR\n"
+            f"Gold Value:           {gold_value:,.2f} SAR\n"
+            f"Stocks Value:         {stocks_value:,.2f} SAR\n"
+            f"Total Wealth:         {total_wealth:,.2f} SAR\n"
+            f"Debts:                {debts:,.2f} SAR\n"
+            f"Net Wealth:           {net_wealth:,.2f} SAR\n"
             f"{'─' * 35}\n"
-            f"الزكاة الواجبة (2.5%): {zakat_due:,.2f} ريال"
+            f"Zakat Due (2.5%):     {zakat_due:,.2f} SAR"
         )
     except Exception as e:
-        return f"⚠️ خطأ في حساب الزكاة: {e}"
+        return f"⚠️ Error calculating Zakat: {e}"
 
 
 @registry.register(
-    description="حساب الأيام بين تاريخين — معرفة عدد الأيام والأسابيع والأشهر",
+    description="Calculate the duration and days between two dates.",
     parameters={
-        "start_date": {"type": "str", "description": "تاريخ البداية (YYYY-MM-DD)"},
-        "end_date": {"type": "str", "description": "تاريخ النهاية (YYYY-MM-DD)"},
+        "start_date": {"type": "str", "description": "Start date (YYYY-MM-DD)"},
+        "end_date": {"type": "str", "description": "End date (YYYY-MM-DD)"},
     },
 )
 async def contract_days(start_date: str, end_date: str) -> str:
@@ -500,24 +500,24 @@ async def contract_days(start_date: str, end_date: str) -> str:
         delta = end - start
         total_days = delta.days
         if total_days < 0:
-            return "⚠️ تاريخ النهاية يجب أن يكون بعد تاريخ البداية."
+            return "⚠️ End date must be after start date."
         weeks = total_days // 7
         remaining_days = total_days % 7
         months_approx = round(total_days / 30.44, 1)
         return (
-            f"📅 حساب المدة بين تاريخين\n"
+            f"📅 Duration Calculator\n"
             f"{'─' * 35}\n"
-            f"تاريخ البداية:        {start_date}\n"
-            f"تاريخ النهاية:        {end_date}\n"
+            f"Start Date:           {start_date}\n"
+            f"End Date:             {end_date}\n"
             f"{'─' * 35}\n"
-            f"عدد الأيام:           {total_days:,} يوم\n"
-            f"عدد الأسابيع:         {weeks} أسبوع و{remaining_days} يوم\n"
-            f"عدد اأشهر (تقريباً):  {months_approx} شهر"
+            f"Total Days:           {total_days:,} days\n"
+            f"Total Weeks:          {weeks} weeks and {remaining_days} days\n"
+            f"Months (approx):      {months_approx} months"
         )
     except ValueError:
-        return "⚠️ صيغة التاريخ غير صحيحة. استخدم YYYY-MM-DD (مثال: 2024-01-01)"
+        return "⚠️ Invalid date format. Use YYYY-MM-DD (e.g., 2024-01-01)"
     except Exception as e:
-        return f"⚠️ خطأ في حساب المدة: {e}"
+        return f"⚠️ Error calculating duration: {e}"
 
 
 @registry.register(

@@ -8,6 +8,14 @@ Run:  python setup.py
 """
 from __future__ import annotations
 
+import sys
+# Configure console output to support UTF-8 on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import json
 import os
 import re as _re
@@ -15,7 +23,6 @@ import secrets
 import shutil
 import socket
 import subprocess
-import sys
 import threading
 import time
 import urllib.request
@@ -318,7 +325,6 @@ def preflight_check() -> None:
 
     # 1. Python version
     if sys.version_info < (3, 11):
-        warn(f"Python ≥ 3.11 مطلوب (أنت تستخدم {sys.version_info[0]}.{sys.version_info[1]})")
         warn(f"Python ≥ 3.11 required (you have {sys.version_info[0]}.{sys.version_info[1]})")
         checks_ok = False
 
@@ -326,7 +332,6 @@ def preflight_check() -> None:
     in_venv = (hasattr(sys, "real_prefix") or
                (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
     if not in_venv:
-        warn("🚩 البيئة الافتراضية غير مفعلة — يفضل: python -m venv venv && venv\\Scripts\\activate")
         warn("🚩 Virtual environment not active — recommended: python -m venv venv && source venv/bin/activate")
 
     # 3. Dependencies check
@@ -337,27 +342,26 @@ def preflight_check() -> None:
         except ImportError:
             missing.append(pkg)
     if missing:
-        warn(f"📦 بعض الاعتماديات مفقودة: {', '.join(missing)}")
         warn(f"📦 Missing packages: {', '.join(missing)}")
-        if ask_yes("  تثبيتها الآن؟ / Install now?", True):
-            info("جاري التثبيت... (قد يستغرق دقيقة)")
+        if ask_yes("  Install now?", True):
+            info("Installing... (this may take a minute)")
             subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
                                    os.path.join(ROOT, "requirements.txt")],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            ok("✅ تم تثبيت الاعتماديات")
+            ok("✅ Dependencies installed successfully")
 
     # 4. Express mode
-    EXPRESS_MODE = ask_yes("⚡ وضع سريع؟ (قيم افتراضية للأسئلة المتكررة)", False)
+    EXPRESS_MODE = ask_yes("⚡ Express mode? (Uses default settings for common questions)", False)
     if EXPRESS_MODE:
-        ok("تم اختيار الوضع السريع — استخدم القيم الافتراضية")
+        ok("Express mode selected — using defaults")
 
     # 5. Internet check
-    info("🔍 فحص الاتصال بالإنترنت...")
+    info("🔍 Checking internet connection...")
     try:
         socket.create_connection(("8.8.8.8", 53), timeout=3)
-        ok("✅ الإنترنت متصل")
+        ok("✅ Internet is connected")
     except OSError:
-        warn("⚠️ الإنترنت غير متصل — اختبارات API السحابية ستفشل")
+        warn("⚠️ No internet connection — cloud API checks may fail")
 
     # 6. Node.js check
     node = shutil.which("node") or shutil.which("node.exe")
@@ -365,18 +369,18 @@ def preflight_check() -> None:
     if node:
         ok(f"✅ Node.js: {node}")
     else:
-        warn("⚠️ Node.js غير مثبت — واتساب لن يعمل")
-        warn("   ثبته من: https://nodejs.org")
+        warn("⚠️ Node.js not installed — WhatsApp integration will not function")
+        warn("   Download it from: https://nodejs.org")
     if npm:
         ok(f"✅ npm: {npm}")
     else:
-        warn("⚠️ npm غير موجود")
+        warn("⚠️ npm not found")
 
     print()
     if not checks_ok:
-        fail("❌ المتطلبات الأساسية غير مكتملة — راجع التحذيرات أعلاه")
+        fail("❌ Prerequisites not met — see warnings above")
         sys.exit(1)
-    ok("✅ كل الفحوصات مكتملة")
+    ok("✅ All checks complete")
     print()
 
 
@@ -385,7 +389,7 @@ def maybe_skip(step_num: int, title: str) -> bool:
     """In express mode, skip with defaults. Otherwise ask to skip."""
     if EXPRESS_MODE:
         return True
-    return not ask_yes(f"⏭️ تخطي خطوة \"{title}\"؟ / Skip \"{title}\"?", False)
+    return not ask_yes(f"⏭️ Skip step \"{title}\"?", False)
 
 
 # ─── UI helpers ───────────────────────────────────────────────────
@@ -1084,7 +1088,7 @@ def _link_whatsapp(env: dict, settings: dict) -> None:
             env["ADMIN_NUMBERS"] = env["ALLOWED_NUMBERS"]
             # Update .env with the new numbers
             _write_files(env, settings)
-            ok("✅ تم حفظ الأرقام المسموحة")
+            ok("✅ Allowed numbers saved")
         else:
             warn(L["link_timeout"])
     finally:

@@ -12,16 +12,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EMPLOYEES_FILE = os.path.join(ROOT, "config", "employees.json")
 
 DEFAULT_EMPLOYEES = [
-    {"id": 1, "name": "عبدالحميد", "name_en": "Abdulhameed", "role": "CEO / Owner",
-     "department": "الإدارة", "phone": "966500000001", "email": "abdulhameed@company.sa"},
-    {"id": 2, "name": "أحمد محمد", "name_en": "Ahmed Mohammed", "role": "محاسب",
-     "department": "المالية", "phone": "966500000002", "email": "ahmed@company.sa"},
-    {"id": 3, "name": "فاطمة علي", "name_en": "Fatima Ali", "role": "مديرة مبيعات",
-     "department": "المبيعات", "phone": "966500000003", "email": "fatima@company.sa"},
-    {"id": 4, "name": "خالد عبدالله", "name_en": "Khalid Abdullah", "role": "مدير مخازن",
-     "department": "المخازن", "phone": "966500000004", "email": "khalid@company.sa"},
-    {"id": 5, "name": "سارة عمر", "name_en": "Sara Omar", "role": "خدمة عملاء",
-     "department": "الدعم", "phone": "966500000005", "email": "sara@company.sa"},
+    {"id": 1, "name": "Abdulhameed", "role": "CEO / Owner",
+     "department": "Administration", "phone": "966500000001", "email": "abdulhameed@company.sa"},
+    {"id": 2, "name": "Ahmed Mohammed", "role": "Accountant",
+     "department": "Finance", "phone": "966500000002", "email": "ahmed@company.sa"},
+    {"id": 3, "name": "Fatima Ali", "role": "Sales Manager",
+     "department": "Sales", "phone": "966500000003", "email": "fatima@company.sa"},
+    {"id": 4, "name": "Khalid Abdullah", "role": "Warehouse Manager",
+     "department": "Warehouse", "phone": "966500000004", "email": "khalid@company.sa"},
+    {"id": 5, "name": "Sara Omar", "role": "Customer Support",
+     "department": "Support", "phone": "966500000005", "email": "sara@company.sa"},
 ]
 
 
@@ -53,12 +53,12 @@ async def search_employee(query: str = "") -> str:
         employees = get_employees()
         if not query.strip():
             # List all
-            lines = ["👥 دليل الموظفين / Employee Directory\n"]
-            lines.append(f"إجمالي {len(employees)} موظف\n")
+            lines = ["👥 Employee Directory\n"]
+            lines.append(f"Total {len(employees)} employee(s)\n")
             for emp in employees:
                 lines.append(
-                    f"  🧑 {emp['name']} ({emp.get('name_en', '')}) — {emp.get('role', '')}\n"
-                    f"     قسم: {emp.get('department', '')} | 📞 {emp.get('phone', '')} | ✉️ {emp.get('email', '')}\n"
+                    f"  🧑 {emp['name']} — {emp.get('role', '')}\n"
+                    f"     Department: {emp.get('department', '')} | 📞 {emp.get('phone', '')} | ✉️ {emp.get('email', '')}\n"
                 )
             return "".join(lines)
 
@@ -66,7 +66,6 @@ async def search_employee(query: str = "") -> str:
         results = []
         for emp in employees:
             if (q in emp.get("name", "").lower() or
-                q in emp.get("name_en", "").lower() or
                 q in emp.get("department", "").lower() or
                 q in emp.get("role", "").lower() or
                 q in emp.get("phone", "") or
@@ -74,23 +73,23 @@ async def search_employee(query: str = "") -> str:
                 results.append(emp)
 
         if not results:
-            return f"❌ لا يوجد موظف مطابق لـ \"{query}\"\n   No employee matches \"{query}\""
+            return f"❌ No employee matches \"{query}\""
 
-        lines = [f"🔍 نتائج البحث عن \"{query}\" — {len(results)} موظف\n"]
+        lines = [f"🔍 Search results for \"{query}\" — {len(results)} employee(s)\n"]
         for emp in results:
             lines.append(
-                f"  🧑 {emp['name']} ({emp.get('name_en', '')})\n"
-                f"     الدور: {emp.get('role', '')} | القسم: {emp.get('department', '')}\n"
+                f"  🧑 {emp['name']}\n"
+                f"     Role: {emp.get('role', '')} | Department: {emp.get('department', '')}\n"
                 f"     📞 {emp.get('phone', '')} | ✉️ {emp.get('email', '')}\n"
             )
         return "".join(lines)
 
     except Exception as e:
-        return f"❌ خطأ في البحث: {e}"
+        return f"❌ Search error: {e}"
 
 
 async def add_employee(name: str, role: str = "", department: str = "",
-                        phone: str = "", email: str = "", name_en: str = "") -> str:
+                        phone: str = "", email: str = "") -> str:
     """Add a new employee to the directory.
 
     Args:
@@ -99,7 +98,6 @@ async def add_employee(name: str, role: str = "", department: str = "",
         department: Department name
         phone: Phone number
         email: Email address
-        name_en: English version of the name (optional)
 
     Returns:
         Confirmation message.
@@ -110,7 +108,6 @@ async def add_employee(name: str, role: str = "", department: str = "",
         emp = {
             "id": new_id,
             "name": name,
-            "name_en": name_en or name,
             "role": role,
             "department": department,
             "phone": phone,
@@ -119,6 +116,6 @@ async def add_employee(name: str, role: str = "", department: str = "",
         employees.append(emp)
         with open(EMPLOYEES_FILE, "w", encoding="utf-8") as f:
             json.dump(employees, f, ensure_ascii=False, indent=2)
-        return f"✅ تمت إضافة الموظف: {name}\n   ID: {new_id}\n   الدور: {role}\n   القسم: {department}"
+        return f"✅ Employee added: {name}\n   ID: {new_id}\n   Role: {role}\n   Department: {department}"
     except Exception as e:
-        return f"❌ خطأ في الإضافة: {e}"
+        return f"❌ Addition error: {e}"

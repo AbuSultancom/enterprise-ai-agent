@@ -1,7 +1,7 @@
 {
   "version": 4,
   "llm": {
-    "default_model": "ollama:qwen2.5:7b"
+    "default_model": "openai:deepseek-chat"
   },
   "agent": {
     "name": "Enterprise AI Agent",
@@ -13,7 +13,7 @@
   },
   "channels": {
     "whatsapp": {
-      "role": "user"
+      "enabled": false
     },
     "telegram": {
       "enabled": false
@@ -37,11 +37,11 @@
     "web_search": true,
     "calculator": true,
     "get_current_time": true,
-    "read_file": false,
+    "read_file": true,
     "search_conversations": true,
     "generate_report": true,
     "list_reports": true,
-    "accounting_tools": true,
+    "accounting_tools": false,
     "knowledge_rag": true
   }
 }

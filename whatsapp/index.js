@@ -39,12 +39,12 @@ const REPORT_ENABLED = (process.env.REPORT_ENABLED || 'false') === 'true';
 const REPORT_TIME = process.env.REPORT_TIME || '08:00';       // HH:MM (24h, server local time)
 const REPORT_TO = (process.env.REPORT_TO || '').replace(/\D/g, ''); // digits, empty = self-chat
 const REPORT_MESSAGE = process.env.REPORT_MESSAGE ||
-  'أعطني تقريرًا يوميًا مختصرًا: ملخص مبيعات اليوم وعدد الفواتير وأهم ملاحظة، في نقاط قصيرة.';
+  'Give me a concise daily report: summary of today\'s sales, count of invoices, and key notes, in short bullet points.';
 // Report schedule: daily | weekly (REPORT_WEEKDAY, 0=Sun..6=Sat) | monthly (1st of month)
 const REPORT_SCHEDULE = process.env.REPORT_SCHEDULE || 'daily';
 const REPORT_WEEKDAY = parseInt(process.env.REPORT_WEEKDAY || '5', 10); // 5 = Friday
-const WEEKLY_MESSAGE = 'أعطني تقريرًا أسبوعيًا مختصرًا: ملخص مبيعات هذا الأسبوع وعدد الفواتير ومقارنة سريعة بالأسبوع الماضي، في نقاط قصيرة.';
-const MONTHLY_MESSAGE = 'أعطني تقريرًا شهريًا مختصرًا: ملخص مبيعات هذا الشهر وأفضل العملاء ومقارنة سريعة بالشهر الماضي، في نقاط قصيرة.';
+const WEEKLY_MESSAGE = 'Give me a concise weekly report: summary of sales this week, count of invoices, and a quick comparison with last week, in short bullet points.';
+const MONTHLY_MESSAGE = 'Give me a concise monthly report: summary of sales this month, top customers, and a quick comparison with last month, in short bullet points.';
 // Smart alerts: query accounting every N minutes, alert if expenses exceed ALERT_LIMIT.
 const ALERTS_ENABLED = (process.env.ALERTS_ENABLED || 'false') === 'true';
 const ALERT_LIMIT = parseFloat(process.env.ALERT_LIMIT || '0'); // 0 = off
@@ -121,36 +121,36 @@ async function askAgent(text, apiKey, history, sessionId) {
   return data.answer || 'No answer.';
 }
 
-const HELP_TEXT = `🤖 *أوامر البوت:*
-• ${PREFIX}ملخص — ملخص سريع لمبيعات اليوم
-• ${PREFIX}فاتورة 123 — تفاصيل فاتورة برقمها
-• ${PREFIX}عميل أحمد — ملخص تعاملات عميل
-• ${PREFIX}مخزون — حالة المخزون
-• ${PREFIX}مسح — مسح ذاكرة المحادثة
-• ${PREFIX}مساعدة — هذه القائمة
-أو اكتب أي سؤال بعد ${PREFIX}وسأجيبك.`;
+const HELP_TEXT = `🤖 *Bot Commands:*
+• ${PREFIX}summary — Quick summary of today's sales
+• ${PREFIX}invoice 123 — Invoice details by number
+• ${PREFIX}customer John — Summary of customer transactions
+• ${PREFIX}stock — Inventory status
+• ${PREFIX}clear — Clear conversation memory
+• ${PREFIX}help — Show this command list
+Or type any question after ${PREFIX} and I will answer you.`;
 
 // Built-in quick commands (matched on the text AFTER the prefix is stripped).
 function runCommand(text, chatId) {
   const cmd = text.trim();
-  if (cmd === 'مساعدة' || cmd === 'help') return { reply: HELP_TEXT };
-  if (cmd === 'مسح' || cmd === 'clear') {
+  if (cmd === 'help' || cmd === 'commands') return { reply: HELP_TEXT };
+  if (cmd === 'clear') {
     histories.delete(chatId);
-    return { reply: '🤖 تم مسح ذاكرة محادثتنا. نبدأ من جديد!' };
+    return { reply: '🤖 Conversation memory cleared. Let\'s start fresh!' };
   }
-  if (cmd === 'ملخص' || cmd === 'summary') {
-    return { ask: 'أعطني ملخصًا سريعًا لمبيعات اليوم في نقاط قصيرة بالعربية.' };
+  if (cmd === 'summary') {
+    return { ask: 'Give me a quick summary of today\'s sales in short bullet points in English.' };
   }
-  if (cmd === 'مخزون' || cmd === 'stock') {
-    return { ask: 'اعرض ملخص حالة المخزون الحالي والأصناف منخفضة الرصيد في نقاط قصيرة بالعربية.' };
+  if (cmd === 'stock') {
+    return { ask: 'Show a summary of current inventory status and low stock items in short bullet points in English.' };
   }
-  let m = cmd.match(/^(?:فاتورة|invoice)\s+(.+)$/u);
+  let m = cmd.match(/^(?:invoice)\s+(.+)$/i);
   if (m) {
-    return { ask: `ابحث عن الفاتورة رقم "${m[1].trim()}" واعرض رقمها وتاريخها واسم العميل وإجماليها وحالتها بالعربية.` };
+    return { ask: `Find invoice number "${m[1].trim()}" and display its number, date, customer name, net total, and status in English.` };
   }
-  m = cmd.match(/^(?:عميل|customer)\s+(.+)$/u);
+  m = cmd.match(/^(?:customer)\s+(.+)$/i);
   if (m) {
-    return { ask: `اعرض ملخص تعاملات العميل "${m[1].trim()}": إجمالي المشتريات وعدد الفواتير وآخر عملية، بالعربية.` };
+    return { ask: `Show summary of transactions for customer "${m[1].trim()}": total purchases, invoice count, and last transaction, in English.` };
   }
   return null;
 }
@@ -200,22 +200,22 @@ client.on('message', async (msg) => {
       if (!allowedImg) return;
       console.log(`[img] from ${msg.from}`);
       if (!VISION_MODEL) {
-        await msg.reply('🤖 وصلتني صورتك، لكن قراءة الصور غير مفعّلة بعد. أضف VISION_MODEL (مثل gpt-4o) في ملف .env');
+        await msg.reply('🤖 I received your image, but image reading is not enabled yet. Please add VISION_MODEL (e.g. gpt-4o) in your .env file');
         return;
       }
-      await msg.reply('⏳ أقرأ الصورة...');
+      await msg.reply('⏳ Reading the image...');
       try {
         const media = await msg.downloadMedia();
-        const q = caption.replace(PREFIX, '').trim() || 'اقرأ محتوى هذه الصورة بالتفصيل واستخرج البيانات المهمة بالعربية.';
+        const q = caption.replace(PREFIX, '').trim() || 'Read the contents of this image in detail and extract the important data in English.';
         const desc = await readImage(media.data, media.mimetype, q);
         if (!desc) {
-          await msg.reply('🤖 تعذّرت قراءة الصورة — تحقق من VISION_MODEL و OPENAI_API_KEY');
+          await msg.reply('🤖 Could not read the image — check VISION_MODEL and OPENAI_API_KEY');
           return;
         }
         await msg.reply('🤖 ' + desc);
       } catch (e) {
         console.error('Image handling error:', e);
-        await msg.reply('🤖 حدث خطأ أثناء معالجة الصورة.');
+        await msg.reply('🤖 An error occurred while processing the image.');
       }
       return;
     }
@@ -291,7 +291,7 @@ client.on('message', async (msg) => {
 
 // --- Scheduled reports (daily / weekly / monthly) ---
 let lastReportDay = '';
-const REPORT_TITLES = { daily: 'التقرير اليومي', weekly: 'التقرير الأسبوعي', monthly: 'التقرير الشهري' };
+const REPORT_TITLES = { daily: 'Daily Report', weekly: 'Weekly Report', monthly: 'Monthly Report' };
 const REPORT_MESSAGES = { daily: REPORT_MESSAGE, weekly: WEEKLY_MESSAGE, monthly: MONTHLY_MESSAGE };
 
 function reportDueToday(now) {
@@ -313,7 +313,7 @@ setInterval(async () => {
     console.log(`[report] generating ${REPORT_SCHEDULE} report...`);
     const answer = await askAgent(message, apiKey, [], 'report');
     const chatId = REPORT_TO ? `${REPORT_TO}@c.us` : client.info.wid._serialized;
-    await client.sendMessage(chatId, `📊 *${REPORT_TITLES[REPORT_SCHEDULE] || 'التقرير'}:*\n\n🤖 ` + answer);
+    await client.sendMessage(chatId, `📊 *${REPORT_TITLES[REPORT_SCHEDULE] || 'Report'}:*\n\n🤖 ` + answer);
     console.log('[report] sent to', chatId);
   } catch (e) {
     console.error('[report] failed:', e.message);
@@ -340,7 +340,7 @@ setInterval(async () => {
       lastAlertDay = day;
       const chatId = (ALERT_TO || REPORT_TO) ? `${ALERT_TO || REPORT_TO}@c.us` : client.info.wid._serialized;
       await client.sendMessage(chatId,
-        `🚨 *تنبيه مصروفات!*\n\nمصروفات اليوم بلغت ${total.toLocaleString('en')} وتجاوزت الحد المحدد (${ALERT_LIMIT.toLocaleString('en')}).`);
+        `🚨 *Expense Alert!*\n\nToday's expenses reached ${total.toLocaleString('en')} and exceeded the set limit (${ALERT_LIMIT.toLocaleString('en')}).`);
       console.log('[alert] expense alert sent:', total);
     }
   } catch (e) {
