@@ -3,6 +3,7 @@ accounting, audit log, dashboard, conversation memory."""
 from __future__ import annotations
 
 import datetime
+import io
 import json
 import os
 import secrets
@@ -15,6 +16,8 @@ from pydantic import BaseModel
 
 import tools.builtin  # noqa: F401 - registers built-in tools
 import tools.accounting  # noqa: F401 - registers accounting/ERP tools
+import tools.communication  # noqa: F401 - registers communication tools
+import tools.voice  # noqa: F401 - registers voice tools
 import config_loader
 from agent_core.agent import Agent
 from orchestrator.agent import OrchestratorAgent
@@ -103,6 +106,14 @@ class ChatRequest(BaseModel):
     history: list[dict] | None = None
     session_id: str | None = None
     mode: str = "orchestrator"
+
+
+class AgentSettingsRequest(BaseModel):
+    name: str | None = None
+    personality: str | None = None
+    language: str | None = None
+    pii_masking: bool | None = None
+    max_memory: int | None = None
 
 
 class DocRequest(BaseModel):
@@ -285,6 +296,47 @@ async def get_conversation(session_id: str):
     return {"session_id": session_id, "title": title, "messages": messages}
 
 
+@app.get("/v1/conversations/{session_id}/export", dependencies=[Depends(require_role("admin", "user"))])
+async def export_conversation(session_id: str, format: str = "markdown"):
+    messages = conv_store.get_history(session_id, limit=1000)
+    sessions = conv_store.list_sessions(limit=200)
+    title = "Conversation"
+    for s in sessions:
+        if s["id"] == session_id:
+            title = s["title"]
+            break
+
+    if format == "json":
+        data = json.dumps({"session_id": session_id, "title": title, "messages": messages}, indent=2, ensure_ascii=False)
+        return StreamingResponse(
+            io.BytesIO(data.encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="chat_{session_id[:8]}.json"'}
+        )
+    elif format == "html":
+        body_html = f"<h1>{title}</h1><p><em>Exported on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}</em></p><hr>"
+        for m in messages:
+            role_title = "👤 User" if m["role"] == "user" else "🤖 Assistant"
+            body_html += f"<div style='margin-bottom:15px;padding:10px;background:#f4f5f8;border-radius:8px;'><strong>{role_title}:</strong><div style='margin-top:5px;'>{m['content']}</div></div>"
+        full_html = f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>{title}</title><style>body{{font-family:system-ui,sans-serif;padding:30px;line-height:1.6;color:#1a1a1a;max-width:800px;margin:0 auto;}}</style></head><body>{body_html}</body></html>"
+        return StreamingResponse(
+            io.BytesIO(full_html.encode("utf-8")),
+            media_type="text/html",
+            headers={"Content-Disposition": f'attachment; filename="chat_{session_id[:8]}.html"'}
+        )
+    else:
+        md_lines = [f"# {title}", f"*Exported on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}*", "---", ""]
+        for m in messages:
+            role_name = "**User**" if m["role"] == "user" else "**Assistant**"
+            md_lines.append(f"### {role_name}:\n{m['content']}\n")
+        md_content = "\n".join(md_lines)
+        return StreamingResponse(
+            io.BytesIO(md_content.encode("utf-8")),
+            media_type="text/markdown",
+            headers={"Content-Disposition": f'attachment; filename="chat_{session_id[:8]}.md"'}
+        )
+
+
 @app.delete("/v1/conversations/{session_id}", dependencies=[Depends(require_role("admin"))])
 async def delete_conversation(session_id: str):
     ok = conv_store.delete_session(session_id)
@@ -311,6 +363,41 @@ async def add_doc(req: DocRequest):
     doc = store.add(req.title, req.content)
     await store.embed_document(doc, gateway)
     return {"id": doc.id, "title": doc.title, "embedded": bool(doc.embedding)}
+
+
+@app.get("/v1/settings/agent", dependencies=[Depends(require_role("admin", "user"))])
+async def get_agent_settings():
+    identity = config_loader.agent_identity()
+    return {
+        "name": identity.get("name", "Enterprise AI Agent"),
+        "personality": identity.get("personality", "a professional assistant"),
+        "language": identity.get("language", "auto"),
+        "pii_masking": True,
+        "max_memory": int(os.getenv("CHAT_MEMORY", "5"))
+    }
+
+
+@app.post("/v1/settings/agent", dependencies=[Depends(require_role("admin"))])
+async def update_agent_settings(req: AgentSettingsRequest, role: str = Security(require_role("admin"))):
+    current = config_loader.load_settings()
+    agent_cfg = current.get("agent", {})
+    if req.name is not None:
+        agent_cfg["name"] = req.name
+    if req.personality is not None:
+        agent_cfg["personality"] = req.personality
+    if req.language is not None:
+        agent_cfg["language"] = req.language
+    current["agent"] = agent_cfg
+    config_loader.save_settings(current)
+    audit("update_settings", role, {"updated": req.model_dump(exclude_unset=True) if hasattr(req, "model_dump") else req.dict(exclude_unset=True)})
+    return {"status": "ok", "settings": current["agent"]}
+
+
+@app.post("/v1/settings/smtp/test", dependencies=[Depends(require_role("admin"))])
+async def test_smtp_settings(to_email: str):
+    from tools.communication import send_email_notification
+    res = await send_email_notification(to_email, "Enterprise AI Agent — Test Alert", "This is a test notification from the Enterprise AI Agent Settings Center.")
+    return {"result": res}
 
 
 def _extract_text(filename: str, data: bytes) -> str:

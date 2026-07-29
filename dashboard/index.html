@@ -1201,48 +1201,135 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
   </div>
 </main>
 
-<!-- === Settings Modal === -->
+<!-- === Enterprise Settings Modal === -->
 <div class="modal-overlay" id="settingsModal">
-  <div class="modal">
+  <div class="modal" style="max-width:680px">
     <button class="modal-close" onclick="closeModal('settingsModal')">✕</button>
-    <h2 data-i18n="settings_title">⚙️ Settings</h2>
-    <div class="tabs">
-      <button class="tab active" data-tab="tabModel" onclick="switchTab(this,'tabModel')" data-i18n="tab_model">Model</button>
-      <button class="tab" data-tab="tabKeys" onclick="switchTab(this,'tabKeys')" data-i18n="tab_keys">Keys</button>
-      <button class="tab" data-tab="tabTheme" onclick="switchTab(this,'tabTheme')">🎨 Theme</button>
-      <button class="tab" data-tab="tabKB" onclick="switchTab(this,'tabKB');loadKnowledge()">📚 <span data-i18n="kb_title">Knowledge</span></button>
-      <button class="tab" data-tab="tabAbout" onclick="switchTab(this,'tabAbout')" data-i18n="tab_about">About</button>
+    <h2 data-i18n="settings_title">⚙️ Enterprise Settings Center</h2>
+    <div class="tabs" style="overflow-x:auto;display:flex;gap:4px;margin-top:12px">
+      <button class="tab active" data-tab="tabIdentity" onclick="switchTab(this,'tabIdentity')">🤖 Identity</button>
+      <button class="tab" data-tab="tabModel" onclick="switchTab(this,'tabModel')">🧠 Model & Memory</button>
+      <button class="tab" data-tab="tabSecurity" onclick="switchTab(this,'tabSecurity')">🔒 Security & Roles</button>
+      <button class="tab" data-tab="tabERP" onclick="switchTab(this,'tabERP');loadERPHealth()">🏦 ERP Databases</button>
+      <button class="tab" data-tab="tabChannels" onclick="switchTab(this,'tabChannels')">📱 Channels & Alerts</button>
+      <button class="tab" data-tab="tabKB" onclick="switchTab(this,'tabKB');loadKnowledge()">📚 Knowledge Base</button>
     </div>
-    <div class="tab-content active" id="tabModel">
-      <p data-i18n="model_desc">Select the AI model for chatting:</p>
-      <select id="modelSelect" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;font-family:var(--font);margin-top:6px"></select>
-      <p style="font-size:0.75rem;color:var(--fg3);margin-top:8px" data-i18n="model_hint">You can set a different model per API request too.</p>
-    </div>
-    <div class="tab-content" id="tabKeys">
-      <p data-i18n="keys_desc">Your API keys (shown once during setup):</p>
-      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-        <label style="font-size:0.8rem;color:var(--fg2)">API Key:</label>
-        <input type="text" id="apiKeyInput" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;font-family:monospace" placeholder="X-API-Key">
-        <button class="header-btn" onclick="saveKey()" data-i18n="save_key" style="align-self:flex-start;margin-top:4px">💾 Save</button>
+
+    <!-- Tab 1: Identity -->
+    <div class="tab-content active" id="tabIdentity">
+      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Customize the AI Agent identity, personality, and response language:</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:0.78rem;color:var(--fg3)">Agent Name:</label>
+          <input type="text" id="settingAgentName" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;margin-top:4px" placeholder="Enterprise AI Agent">
+        </div>
+        <div>
+          <label style="font-size:0.78rem;color:var(--fg3)">Personality & Tone:</label>
+          <input type="text" id="settingAgentPersonality" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;margin-top:4px" placeholder="a professional, concise enterprise assistant">
+        </div>
+        <div>
+          <label style="font-size:0.78rem;color:var(--fg3)">Default Answer Language:</label>
+          <select id="settingAgentLang" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;margin-top:4px">
+            <option value="auto">Auto (Match User Input)</option>
+            <option value="ar">Arabic (العربية)</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <button class="header-btn" onclick="saveAgentIdentity()" style="align-self:flex-start;margin-top:6px;background:var(--accent);color:#fff;border:none">💾 Save Identity</button>
       </div>
     </div>
-    <div class="tab-content" id="tabTheme">
-      <p data-i18n="theme_desc" style="font-size:0.85rem;color:var(--fg2)">Choose the app theme:</p>
-      <div class="theme-toggle" style="margin:12px auto;width:fit-content">
-        <button class="theme-opt" data-theme="dark" onclick="setTheme('dark')">🌙 Dark</button>
-        <button class="theme-opt" data-theme="light" onclick="setTheme('light')">☀️ Light</button>
-        <button class="theme-opt" data-theme="system" onclick="setTheme('system')">💻 Auto</button>
+
+    <!-- Tab 2: Model & Memory -->
+    <div class="tab-content" id="tabModel">
+      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Configure AI models, privacy filters, and context window limit:</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:0.78rem;color:var(--fg3)">Active Model:</label>
+          <select id="modelSelect" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;margin-top:4px"></select>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg3);border-radius:var(--radius-xs);margin-top:4px">
+          <div>
+            <strong style="font-size:0.85rem">PII Data Redaction (Masking)</strong>
+            <div style="font-size:0.72rem;color:var(--fg3)">Redacts credit cards, IDs, and tokens before sending to cloud AI</div>
+          </div>
+          <span style="background:var(--success);color:#fff;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700">Active</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg3);border-radius:var(--radius-xs)">
+          <div>
+            <strong style="font-size:0.85rem">Hybrid RAG Search Engine</strong>
+            <div style="font-size:0.72rem;color:var(--fg3)">BM25 Keyword Matching + Vector Embeddings + Reranking</div>
+          </div>
+          <span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700">Enabled</span>
+        </div>
       </div>
     </div>
-    <div class="tab-content" id="tabAbout">
-      <p style="line-height:1.8"><strong>Enterprise AI Agent</strong> v0.5</p>
-      <p style="font-size:0.8rem;color:var(--fg2);margin-top:8px" data-i18n="about_desc">Enterprise AI Agent platform for organizations. Supports chat, search, accounting, vision, and reports.</p>
-      <p style="font-size:0.75rem;color:var(--fg3);margin-top:12px">© AbuSultancom</p>
+
+    <!-- Tab 3: Security & Roles -->
+    <div class="tab-content" id="tabSecurity">
+      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Manage Role-Based Access Control (RBAC) and API keys:</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:0.78rem;color:var(--fg3)">API Key:</label>
+          <input type="text" id="apiKeyInput" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;font-family:monospace;margin-top:4px" placeholder="X-API-Key">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="header-btn" onclick="saveKey()" style="background:var(--accent);color:#fff;border:none">💾 Save Key</button>
+          <button class="header-btn" onclick="rotateKey()" style="background:var(--bg3)">🔄 Rotate Admin Key</button>
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:var(--radius-xs)">
+          <strong style="font-size:0.82rem;color:var(--fg)">Role Security Policy:</strong>
+          <ul style="font-size:0.75rem;color:var(--fg2);margin-top:6px;padding-left:16px;line-height:1.6">
+            <li><strong>Admin:</strong> Full access to all tools, ERP queries, and database configurations.</li>
+            <li><strong>Manager:</strong> Access to sales, revenue reports, and general tools.</li>
+            <li><strong>Employee:</strong> Access to web search, calculator, knowledge base, and directory.</li>
+          </ul>
+        </div>
+      </div>
     </div>
+
+    <!-- Tab 4: ERP & Databases -->
+    <div class="tab-content" id="tabERP">
+      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Connected ERP and Database Systems:</p>
+      <div id="erpHealthList" style="margin-top:8px;min-height:60px">Loading database connections...</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="header-btn" onclick="loadERPHealth()" style="background:var(--accent);color:#fff;border:none">🔄 Test All Connections</button>
+        <button class="header-btn" onclick="discoverERPSchema()" style="background:var(--bg3)">🔍 Auto-Discover Schema</button>
+      </div>
+    </div>
+
+    <!-- Tab 5: Channels & Alerts -->
+    <div class="tab-content" id="tabChannels">
+      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Enterprise Integration Bridges & Communication Services:</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+        <div style="padding:10px;background:var(--bg3);border-radius:var(--radius-xs);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <strong style="font-size:0.85rem">📱 WhatsApp Business Bridge</strong>
+            <div style="font-size:0.72rem;color:var(--fg3)">Node.js QR scan bridge on port 3001</div>
+          </div>
+          <span class="badge" id="settingsWAStatus">Checking</span>
+        </div>
+        <div style="padding:10px;background:var(--bg3);border-radius:var(--radius-xs);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <strong style="font-size:0.85rem">✈️ Telegram Bot Bridge</strong>
+            <div style="font-size:0.72rem;color:var(--fg3)">Telegram bot webhook integration</div>
+          </div>
+          <span class="badge" id="settingsTGStatus">Configured</span>
+        </div>
+        <div style="padding:10px;background:var(--bg3);border-radius:var(--radius-xs);margin-top:6px">
+          <strong style="font-size:0.85rem">✉️ Email Alerts (SMTP)</strong>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <input type="email" id="testEmailInput" placeholder="Recipient email address..." style="flex:1;padding:8px;background:var(--bg4);border:1px solid var(--border);border-radius:4px;color:var(--fg);font-size:0.8rem">
+            <button class="header-btn" onclick="sendTestEmailAlert()" style="background:var(--accent);color:#fff;border:none">Send Test Alert</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 6: Knowledge Base -->
     <div class="tab-content" id="tabKB">
-      <p data-i18n="kb_desc">Uploaded documents the agent can search:</p>
+      <p data-i18n="kb_desc" style="font-size:0.82rem;color:var(--fg2)">Uploaded documents the agent can search:</p>
       <div id="kbList" style="margin-top:10px;min-height:60px"></div>
-      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('uploadInput').click()">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('uploadInput').click()" style="margin-top:10px;border:2px dashed var(--border2);padding:16px;text-align:center;border-radius:var(--radius-xs);cursor:pointer">
         <span data-i18n="upload_hint">📄 Click to upload (PDF, Word, text)</span>
       </div>
       <input type="file" id="uploadInput" style="display:none" accept=".txt,.md,.pdf,.docx,.csv">
@@ -2092,6 +2179,116 @@ function setThemeUI() {
     btn.classList.toggle('active', btn.dataset.theme === currentTheme);
   });
 }
+function showSettings(){
+  document.getElementById('settingsModal').classList.add('open');
+  loadAgentIdentity();
+}
+
+async function loadAgentIdentity() {
+  try {
+    const res = await api('/v1/settings/agent');
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('settingAgentName').value = data.name || '';
+      document.getElementById('settingAgentPersonality').value = data.personality || '';
+      document.getElementById('settingAgentLang').value = data.language || 'auto';
+    }
+  } catch(e) {}
+}
+
+async function saveAgentIdentity() {
+  const name = document.getElementById('settingAgentName').value.trim();
+  const personality = document.getElementById('settingAgentPersonality').value.trim();
+  const language = document.getElementById('settingAgentLang').value;
+  try {
+    const res = await api('/v1/settings/agent', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, personality, language })
+    });
+    if (res.ok) {
+      toast(lang === 'ar' ? '✅ تم حفظ هوية الوكيل بنجاح' : '✅ Agent identity saved');
+    }
+  } catch(e) {
+    toast('❌ Error saving identity');
+  }
+}
+
+async function loadERPHealth() {
+  const container = document.getElementById('erpHealthList');
+  if (!container) return;
+  container.innerHTML = '<p style="font-size:0.8rem;color:var(--fg3)">Testing database connections...</p>';
+  try {
+    const res = await api('/v1/accounting/health');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data.databases || data.databases.length === 0) {
+      container.innerHTML = '<p style="font-size:0.8rem;color:var(--fg3)">No ERP databases configured yet.</p>';
+      return;
+    }
+    container.innerHTML = data.databases.map(db => `
+      <div style="padding:8px 12px;background:var(--bg3);border-radius:var(--radius-xs);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <strong style="font-size:0.85rem">${db.name} (${db.key})</strong>
+          <div style="font-size:0.72rem;color:var(--fg3)">${db.connection?.database ? 'DB: ' + db.connection.database : 'No connection'}</div>
+        </div>
+        <span class="badge" style="background:${db.connection?.connected ? 'var(--success)' : 'var(--danger)'};color:#fff">${db.connection?.connected ? 'Connected' : 'Disconnected'}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<p style="font-size:0.8rem;color:var(--danger)">Failed to load ERP connections</p>';
+  }
+}
+
+async function discoverERPSchema() {
+  toast(lang === 'ar' ? 'جاري فحص قاعدة البيانات...' : 'Discovering schema...');
+  try {
+    const res = await api('/v1/accounting/discover', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      toast(lang === 'ar' ? `✅ تم اكتشاف ${data.tables} جدول` : `✅ Discovered ${data.tables} tables`);
+      loadERPHealth();
+    } else {
+      toast('❌ Discovery failed');
+    }
+  } catch(e) {
+    toast('❌ Discovery failed');
+  }
+}
+
+async function sendTestEmailAlert() {
+  const email = document.getElementById('testEmailInput').value.trim();
+  if (!email) {
+    toast(lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني' : 'Please enter an email address');
+    return;
+  }
+  toast(lang === 'ar' ? 'جاري إرسال التنبيه التجريبي...' : 'Sending test email...');
+  try {
+    const res = await api(`/v1/settings/smtp/test?to_email=${encodeURIComponent(email)}`, { method: 'POST' });
+    if (res.ok) {
+      toast(lang === 'ar' ? '✅ تم إرسال البريد بنجاح' : '✅ Test email sent');
+    } else {
+      toast('❌ Failed to send email');
+    }
+  } catch(e) {
+    toast('❌ Email error');
+  }
+}
+
+async function rotateKey() {
+  try {
+    const res = await api('/v1/admin/rotate-key', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('apiKeyInput').value = data.api_key;
+      saveKey();
+      toast(lang === 'ar' ? '🔑 تم توليد مفتاح جديد بنجاح' : '🔑 New Admin key generated');
+    }
+  } catch(e) {
+    toast('❌ Failed to rotate key');
+  }
+}
+
 async function showHealth(){
   document.getElementById('healthModal').classList.add('open');
   const el=document.getElementById('healthContent');
@@ -2155,6 +2352,36 @@ function switchTab(btn,id){
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
+function closeModal(id) {
+  document.getElementById(id)?.classList.remove('open');
+}
+
+let selectedFmt = 'md';
+
+function selectFmt(fmt) {
+  selectedFmt = fmt;
+  document.querySelectorAll('.export-fmt-card').forEach(c => c.classList.remove('selected'));
+  if (fmt === 'md') document.getElementById('fmtMd')?.classList.add('selected');
+  if (fmt === 'json') document.getElementById('fmtJson')?.classList.add('selected');
+  if (fmt === 'html') document.getElementById('fmtHtml')?.classList.add('selected');
+}
+
+function exportChat() {
+  if (!currentConv) {
+    toast(lang === 'ar' ? 'يرجى اختيار محادثة أولاً' : 'Please select a conversation first');
+    return;
+  }
+  document.getElementById('exportModal').classList.add('open');
+}
+
+function downloadChat() {
+  if (!currentConv) return;
+  const url = `/v1/conversations/${currentConv}/export?format=${selectedFmt}`;
+  window.open(url, '_blank');
+  closeModal('exportModal');
+  toast(lang === 'ar' ? 'جاري بداية التنزيل...' : 'Download started...');
+}
+
 function saveKey(){
   const k=document.getElementById('apiKeyInput').value.trim();
   if(k){apiKey=k;localStorage.setItem('apiKey',k);toast(t('key_saved'))}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% set title = "Channels" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=5&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}قنوات التواصل{% else %}Communication Channels{% endif %}</div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="whatsapp_enabled" id="whatsapp-check" onchange="toggleSection('whatsapp-check','whatsapp-section')" style="display:none">
+                <span class="toggle-switch"></span>
+                WhatsApp
+            </label>
+        </div>
+        <div id="whatsapp-section" style="display:none;margin-left:2rem">
+            <div class="form-group">
+                <label>Command Prefix</label>
+                <input type="text" name="whatsapp_prefix" value="!" style="width:60px">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="telegram_enabled" id="telegram-check" onchange="toggleSection('telegram-check','telegram-section')" style="display:none">
+                <span class="toggle-switch"></span>
+                Telegram
+            </label>
+        </div>
+        <div id="telegram-section" style="display:none;margin-left:2rem">
+            <div class="form-group">
+                <label>Bot Token</label>
+                <input type="password" name="telegram_token" placeholder="123456:ABC-DEF...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="web_enabled" checked style="display:none">
+                <span class="toggle-switch"></span>
+                Web Dashboard
+            </label>
+        </div>
+        <div class="form-group">
+            <label>Dashboard Port</label>
+            <input type="number" name="web_port" value="8000" style="width:100px">
+        </div>
+    </div>
+    <div class="actions">
+        <a href="/setup?step=3&lang={{ lang }}" class="btn btn-outline">&larr; {% if lang == 'ar' %}رجوع{% else %}Back{% endif %}</a>
+        <button type="submit" class="btn btn-primary">{% if lang == 'ar' %}التالي{% else %}Next{% endif %} &rarr;</button>
+    </div>
+</form>
+{% endblock %}

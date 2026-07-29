@@ -24,10 +24,11 @@ class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, Tool] = {}
 
-    def register(self, description: str, parameters: dict[str, Any] | None = None):
+    def register(self, description: str, parameters: dict[str, Any] | None = None, name: str | None = None):
         def decorator(func: Callable):
-            self._tools[func.__name__] = Tool(
-                name=func.__name__,
+            tool_name = name or func.__name__
+            self._tools[tool_name] = Tool(
+                name=tool_name,
                 description=description,
                 func=func,
                 parameters=parameters or {},
@@ -45,7 +46,13 @@ class ToolRegistry:
         """Text block injected into the agent's system prompt."""
         lines = []
         for t in self._tools.values():
-            params = ", ".join(f"{k}: {v.get('type', 'str')}" for k, v in t.parameters.items())
+            props = t.parameters.get("properties", t.parameters) if isinstance(t.parameters, dict) else {}
+            param_parts = []
+            if isinstance(props, dict):
+                for k, v in props.items():
+                    p_type = v.get("type", "str") if isinstance(v, dict) else str(v)
+                    param_parts.append(f"{k}: {p_type}")
+            params = ", ".join(param_parts)
             lines.append(f"- {t.name}({params}): {t.description}")
         return "\n".join(lines)
 

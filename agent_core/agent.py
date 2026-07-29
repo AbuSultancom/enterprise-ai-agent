@@ -99,6 +99,10 @@ def _build_system_prompt(tools_desc: str) -> str:
     return prompt
 
 
+from agent_core.security import SecurityManager, UserContext
+from agent_core.audit import AuditLogger
+
+
 def _parse_tool_json(text: str) -> dict:
     """Parse LLM-generated JSON for tool calls, handling common formatting issues."""
     import re as _re
@@ -114,7 +118,10 @@ class Agent:
         self.max_steps = max_steps
 
     async def run(self, user_input: str, model: str | None = None,
-                  history: list[Message] | None = None) -> dict:
+                  history: list[Message] | None = None,
+                  user_context: UserContext | None = None) -> dict:
+        user_id = user_context.user_id if user_context else "guest"
+        AuditLogger.log_user_query(user_input, user_id=user_id)
         messages = [Message(role="system", content=_build_system_prompt(self.registry.describe()))]
         messages.extend(history or [])
         messages.append(Message(role="user", content=user_input))
@@ -132,7 +139,6 @@ class Agent:
                 call = _parse_tool_json(match.group(1))
                 tool_name, args = call["name"], call.get("arguments", {})
             except (json.JSONDecodeError, KeyError, ValueError) as e:
-                # Try to recover: wrap single-quoted keys
                 try:
                     fixed = match.group(1).replace("'", '"')
                     call = _parse_tool_json(fixed)
@@ -143,11 +149,19 @@ class Agent:
             tool = self.registry.get(tool_name)
             if tool is None:
                 observation = f"Error: unknown tool '{tool_name}'"
+                AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=observation)
             else:
-                try:
-                    observation = await tool.run(**args)
-                except Exception as e:
-                    observation = f"Error running {tool_name}: {e}"
+                allowed, reason = SecurityManager.is_tool_allowed(tool_name, user_context)
+                if not allowed:
+                    observation = f"Error: Security violation — {reason}"
+                    AuditLogger.log_tool_call(tool_name, args, user_id, status="DENIED", result_snippet=reason)
+                else:
+                    try:
+                        observation = await tool.run(**args)
+                        AuditLogger.log_tool_call(tool_name, args, user_id, status="SUCCESS", result_snippet=str(observation))
+                    except Exception as e:
+                        observation = f"Error running {tool_name}: {e}"
+                        AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=str(e))
 
             steps.append({"tool": tool_name, "arguments": args, "observation": observation[:2000]})
             messages.append(Message(role="assistant", content=content))
@@ -156,12 +170,12 @@ class Agent:
 
         return {"answer": "Reached maximum reasoning steps without a final answer.", "steps": steps}
 
-    # ---- Streaming version: yields events for SSE ----
-    # {"type": "step", ...} for tool calls, {"type": "token", "text": ...} for the answer,
-    # {"type": "done"} at the end. A hold-back buffer prevents tool-call markup from leaking.
     async def run_stream(self, user_input: str, model: str | None = None,
-                         history: list[Message] | None = None):
-        HOLD_BACK = 400  # chars kept buffered so TOOL_CALL markup is never streamed
+                         history: list[Message] | None = None,
+                         user_context: UserContext | None = None):
+        user_id = user_context.user_id if user_context else "guest"
+        AuditLogger.log_user_query(user_input, user_id=user_id, channel="stream")
+        HOLD_BACK = 400
         messages = [Message(role="system", content=_build_system_prompt(self.registry.describe()))]
         messages.extend(history or [])
         messages.append(Message(role="user", content=user_input))
@@ -202,11 +216,19 @@ class Agent:
             tool = self.registry.get(tool_name)
             if tool is None:
                 observation = f"Error: unknown tool '{tool_name}'"
+                AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=observation)
             else:
-                try:
-                    observation = await tool.run(**args)
-                except Exception as e:
-                    observation = f"Error running {tool_name}: {e}"
+                allowed, reason = SecurityManager.is_tool_allowed(tool_name, user_context)
+                if not allowed:
+                    observation = f"Error: Security violation — {reason}"
+                    AuditLogger.log_tool_call(tool_name, args, user_id, status="DENIED", result_snippet=reason)
+                else:
+                    try:
+                        observation = await tool.run(**args)
+                        AuditLogger.log_tool_call(tool_name, args, user_id, status="SUCCESS", result_snippet=str(observation))
+                    except Exception as e:
+                        observation = f"Error running {tool_name}: {e}"
+                        AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=str(e))
 
             yield {"type": "step", "tool": tool_name, "arguments": args}
             messages.append(Message(role="assistant", content=buffer))

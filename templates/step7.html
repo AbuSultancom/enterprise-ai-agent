@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set title = "Permissions" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=7&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}الصلاحيات{% else %}Permissions{% endif %}</div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="perm_web_search" checked style="display:none">
+                <span class="toggle-switch"></span>
+                {% if lang == 'ar' %}السماح بالبحث في الويب{% else %}Allow web search{% endif %}
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="perm_file_access" style="display:none">
+                <span class="toggle-switch"></span>
+                {% if lang == 'ar' %}السماح بالوصول للملفات{% else %}Allow file system access{% endif %}
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="perm_accounting" checked style="display:none">
+                <span class="toggle-switch"></span>
+                {% if lang == 'ar' %}السماح بالعمليات المحاسبية{% else %}Allow accounting operations{% endif %}
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="perm_code_exec" style="display:none">
+                <span class="toggle-switch"></span>
+                {% if lang == 'ar' %}السماح بتنفيذ الكود{% else %}Allow code execution{% endif %}
+            </label>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}معاينة{% else %}Preview{% endif %}</div>
+        <div class="preview-box">
+            {{ preview | safe }}
+        </div>
+    </div>
+    <div class="actions">
+        <a href="/setup?step=5&lang={{ lang }}" class="btn btn-outline">&larr; {% if lang == 'ar' %}رجوع{% else %}Back{% endif %}</a>
+        <button type="submit" class="btn btn-success">&check; {% if lang == 'ar' %}إكمال الإعداد{% else %}Complete Setup{% endif %}</button>
+    </div>
+</form>
+{% endblock %}

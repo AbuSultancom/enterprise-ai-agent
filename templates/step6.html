@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% set title = "Accounting" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=6&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}ربط النظام المحاسبي{% else %}Accounting Integration{% endif %}</div>
+        <div class="form-group">
+            <label class="toggle">
+                <input type="checkbox" name="accounting_enabled" id="accounting-check" onchange="toggleSection('accounting-check','accounting-section')" style="display:none">
+                <span class="toggle-switch"></span>
+                {% if lang == 'ar' %}تفعيل الربط المحاسبي{% else %}Enable accounting integration{% endif %}
+            </label>
+        </div>
+        <div id="accounting-section" style="display:none">
+            <div id="databases-container"></div>
+            <button type="button" class="btn btn-outline" onclick="addDatabase()">+ {% if lang == 'ar' %}إضافة قاعدة بيانات{% else %}Add Database{% endif %}</button>
+        </div>
+    </div>
+    <div class="actions">
+        <a href="/setup?step=4&lang={{ lang }}" class="btn btn-outline">&larr; {% if lang == 'ar' %}رجوع{% else %}Back{% endif %}</a>
+        <button type="submit" class="btn btn-primary">{% if lang == 'ar' %}التالي{% else %}Next{% endif %} &rarr;</button>
+    </div>
+</form>
+{% endblock %}

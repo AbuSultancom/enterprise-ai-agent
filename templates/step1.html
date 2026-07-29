@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set title = "Language" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=1&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">Language / اللغة</div>
+        <div class="form-group">
+            <label>Select your preferred language / اختر لغتك المفضلة</label>
+            <select name="language" onchange="window.location.href='?lang='+this.value+'&step=0'">
+                <option value="en" {% if lang == 'en' %}selected{% endif %}>English</option>
+                <option value="ar" {% if lang == 'ar' %}selected{% endif %}>العربية</option>
+            </select>
+        </div>
+    </div>
+    <div class="actions">
+        <div></div>
+        <button type="submit" class="btn btn-primary">{% if lang == 'ar' %}التالي{% else %}Next{% endif %} &rarr;</button>
+    </div>
+</form>
+{% endblock %}

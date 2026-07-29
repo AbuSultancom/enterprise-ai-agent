@@ -1,7 +1,7 @@
 {
   "version": 4,
   "llm": {
-    "default_model": "openai:deepseek-chat"
+    "default_model": "ollama:qwen3.5"
   },
   "agent": {
     "name": "Enterprise AI Agent",
@@ -20,7 +20,7 @@
     }
   },
   "accounting": {
-    "enabled": true,
+    "enabled": false,
     "read_only": true,
     "allowed_queries": [
       "sales_summary",
@@ -37,7 +37,7 @@
     "web_search": true,
     "calculator": true,
     "get_current_time": true,
-    "read_file": true,
+    "read_file": false,
     "search_conversations": true,
     "generate_report": true,
     "list_reports": true,

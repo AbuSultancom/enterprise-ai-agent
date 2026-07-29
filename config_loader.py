@@ -76,3 +76,12 @@ def knowledge_rag_enabled() -> bool:
 
 def agent_identity() -> dict:
     return settings.get("agent", DEFAULTS["agent"])
+
+
+def save_settings(new_settings: dict) -> None:
+    global settings
+    settings.update(new_settings)
+    os.makedirs(os.path.dirname(SETTINGS_PATH) or ".", exist_ok=True)
+    with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2, ensure_ascii=False)
+

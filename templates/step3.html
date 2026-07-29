@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% set title = "Identity" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=3&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}هوية الوكيل{% else %}Agent Identity{% endif %}</div>
+        <div class="form-group">
+            <label>{% if lang == 'ar' %}اسم الوكيل{% else %}Agent Name{% endif %}</label>
+            <input type="text" name="agent_name" value="EnterpriseBot" required>
+        </div>
+        <div class="form-group">
+            <label>{% if lang == 'ar' %}الوصف{% else %}Description{% endif %}</label>
+            <textarea name="agent_description" rows="3" placeholder="AI assistant for enterprise operations"></textarea>
+        </div>
+        <div class="form-group">
+            <label>{% if lang == 'ar' %}لغة الرد{% else %}Response Language{% endif %}</label>
+            <select name="agent_language">
+                <option value="en">English</option>
+                <option value="ar">العربية</option>
+                <option value="zh">中文</option>
+                <option value="auto">Auto-detect</option>
+            </select>
+        </div>
+    </div>
+    <div class="actions">
+        <a href="/setup?step=1&lang={{ lang }}" class="btn btn-outline">&larr; {% if lang == 'ar' %}رجوع{% else %}Back{% endif %}</a>
+        <button type="submit" class="btn btn-primary">{% if lang == 'ar' %}التالي{% else %}Next{% endif %} &rarr;</button>
+    </div>
+</form>
+{% endblock %}

@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
@@ -207,9 +208,37 @@ class HuggingFaceProvider(BaseProvider):
         )
 
 
+class PIIMasker:
+    """Enterprise PII and Sensitive Data Masker.
+    Masks sensitive data (credit cards, national IDs, tokens, keys) before sending payloads to cloud LLMs.
+    """
+    CREDIT_CARD_REGEX = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
+    TOKEN_REGEX = re.compile(r'(?:bearer\s+[a-zA-Z0-9_\-\.=]+|api[_\-]?key["\s:=]+[a-zA-Z0-9_\-]{16,})', re.IGNORECASE)
+    SAUDI_ID_REGEX = re.compile(r'\b[12]\d{9}\b')
+
+    @classmethod
+    def mask_text(cls, text: str) -> str:
+        if not text or not isinstance(text, str):
+            return text
+        text = cls.CREDIT_CARD_REGEX.sub("[REDACTED_CREDIT_CARD]", text)
+        text = cls.TOKEN_REGEX.sub("[REDACTED_TOKEN]", text)
+        text = cls.SAUDI_ID_REGEX.sub("[REDACTED_NATIONAL_ID]", text)
+        return text
+
+    @classmethod
+    def mask_messages(cls, messages: list[Message]) -> list[Message]:
+        return [
+            Message(
+                role=m.role,
+                content=cls.mask_text(m.content),
+                name=m.name
+            ) for m in messages
+        ]
+
+
 class LLMGateway:
     """Single entry point. Picks provider by prefix: 'ollama:model',
-    'openai:model', or 'huggingface:model'."""
+    'openai:model', or 'huggingface:model', with automatic fallback capability."""
 
     def __init__(self):
         self.providers: dict[str, BaseProvider] = {
@@ -218,14 +247,37 @@ class LLMGateway:
             "huggingface": HuggingFaceProvider(),
         }
 
-    async def chat(self, messages: list[Message], model: str | None = None, **kw) -> LLMResponse:
+    async def chat(self, messages: list[Message], model: str | None = None, mask_pii: bool = True, **kw) -> LLMResponse:
         model = model or os.getenv("DEFAULT_MODEL", "ollama:qwen2.5:7b")
+        
+        # Apply PII masking if requested
+        if mask_pii:
+            messages = PIIMasker.mask_messages(messages)
+
         if ":" in model and model.split(":", 1)[0] in self.providers:
             provider_name, model_name = model.split(":", 1)
         else:
             provider_name, model_name = "ollama", model
-        provider = self.providers[provider_name]
-        return await provider.chat(messages, model_name, **kw)
+
+        # Primary attempt
+        try:
+            provider = self.providers[provider_name]
+            return await provider.chat(messages, model_name, **kw)
+        except Exception as primary_err:
+            # Fallback mechanism: if primary provider fails (e.g. Ollama down/timeout), fallback to available provider
+            fallback_order = [p for p in ["openai", "huggingface", "ollama"] if p != provider_name]
+            for fb in fallback_order:
+                fb_provider = self.providers[fb]
+                if fb == "openai" and not fb_provider.api_key:
+                    continue
+                try:
+                    fb_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini") if fb == "openai" else model_name
+                    res = await fb_provider.chat(messages, fb_model, **kw)
+                    res.content = f"*(Fallback via {fb})*\n\n" + res.content
+                    return res
+                except Exception:
+                    continue
+            raise primary_err
 
     async def health(self) -> dict[str, bool]:
         status = {}

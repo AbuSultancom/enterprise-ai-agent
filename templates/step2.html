@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set title = "LLM" %}
+{% block content %}
+<form id="setup-form" method="post" action="/setup?step=2&lang={{ lang }}">
+    <div class="card">
+        <div class="card-title">{% if lang == 'ar' %}إعداد نموذج اللغة{% else %}LLM Configuration{% endif %}</div>
+        <div class="form-group">
+            <label>Provider</label>
+            <select name="llm_provider" id="llm-provider">
+                <option value="ollama">Ollama (Local)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="google">Google Gemini</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Model</label>
+            <select name="llm_model" id="llm-model">
+                <option value="qwen2.5:7b">qwen2.5:7b</option>
+                <option value="llama3.1:8b">llama3.1:8b</option>
+                <option value="deepseek-r1:14b">deepseek-r1:14b</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>API URL</label>
+            <input type="url" name="llm_url" id="llm-url" value="http://localhost:11434" required>
+        </div>
+        <div class="form-group" id="api-key-group" style="display:none">
+            <label>API Key</label>
+            <input type="password" name="llm_api_key" placeholder="sk-...">
+        </div>
+        <button type="button" class="btn btn-outline" id="test-llm-btn" onclick="testConnection('llm')">Test Connection</button>
+        <div id="test-llm-result" class="test-result" style="display:none"></div>
+    </div>
+    <div class="actions">
+        <a href="/setup?step=0&lang={{ lang }}" class="btn btn-outline">&larr; {% if lang == 'ar' %}رجوع{% else %}Back{% endif %}</a>
+        <button type="submit" class="btn btn-primary">{% if lang == 'ar' %}التالي{% else %}Next{% endif %} &rarr;</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% set title = "Complete" %}
+{% block content %}
+<div class="card" style="text-align:center;padding:3rem">
+    <div style="font-size:4rem;margin-bottom:1rem">&#127881;</div>
+    <h2>{% if lang == 'ar' %}اكتمل الإعداد!{% else %}Setup Complete!{% endif %}</h2>
+    <p style="color:var(--text-muted);margin:1rem 0">
+        {% if lang == 'ar' %}وكيل الذكاء الاصطناعي جاهز للاستخدام.{% else %}Your Enterprise AI Agent is ready to use.{% endif %}
+    </p>
+    <div style="margin:2rem 0;text-align:left;max-width:400px;margin-left:auto;margin-right:auto">
+        <div style="margin-bottom:1rem"><strong>{% if lang == 'ar' %}الخطوات التالية:{% else %}Next steps:{% endif %}</strong></div>
+        <ol style="color:var(--text-muted);line-height:2">
+            <li>{% if lang == 'ar' %}راجع ملفات الإعداد{% else %}Review .env and settings.json{% endif %}</li>
+            <li>{% if lang == 'ar' %}شغل: python start.py{% else %}Run: python start.py{% endif %}</li>
+            <li>{% if lang == 'ar' %}افتح: http://localhost:8000{% else %}Open: http://localhost:8000{% endif %}</li>
+        </ol>
+    </div>
+    <a href="/" class="btn btn-primary" style="margin-top:1rem">
+        {% if lang == 'ar' %}اذهب للوحة التحكم{% else %}Go to Dashboard{% endif %}
+    </a>
+</div>
+{% endblock %}
