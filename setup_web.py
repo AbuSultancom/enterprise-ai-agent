@@ -33,7 +33,14 @@ def ensure_templates():
         # Templates will be created by setup.py
         pass
 
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+# Create Jinja2 environment with explicit cache control to avoid reloader bugs
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
+    autoescape=select_autoescape(),
+    cache_size=0  # Disable template caching to avoid unhashable type issues with reloader
+)
+templates = Jinja2Templates(env=_jinja_env)
 
 # In-memory session storage
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -82,7 +89,7 @@ async def setup_page(request: Request, step: int = 0, lang: str = "en"):
         "preview": json.dumps(sessions.get(session_id, {}), indent=2, ensure_ascii=False)
     }
 
-    response = templates.TemplateResponse(template, context)
+    response = templates.TemplateResponse(request, template, context)
     response.set_cookie("session_id", session_id, max_age=3600)
     return response
 
