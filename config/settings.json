@@ -1,26 +1,27 @@
 {
-  "version": 4,
-  "llm": {
-    "default_model": "ollama:qwen3.5"
-  },
   "agent": {
+    "language": "en",
     "name": "Enterprise AI Agent",
-    "language": "auto",
-    "personality": "a professional, concise enterprise assistant"
+    "personality": "a professional, concise enterprise assistant",
+    "reply_language": "auto"
   },
-  "security": {
-    "note": "admin = full access, user = chat + read only"
-  },
+  "llm_provider": "ollama",
+  "llm_model": "qwen3.5",
   "channels": {
+    "web": {
+      "enabled": true,
+      "port": 8000
+    },
     "whatsapp": {
-      "enabled": false
+      "enabled": true,
+      "prefix": "!"
     },
     "telegram": {
-      "enabled": false
+      "enabled": true
     }
   },
   "accounting": {
-    "enabled": false,
+    "enabled": true,
     "read_only": true,
     "allowed_queries": [
       "sales_summary",
@@ -37,11 +38,15 @@
     "web_search": true,
     "calculator": true,
     "get_current_time": true,
-    "read_file": false,
-    "search_conversations": true,
+    "read_file": true,
+    "knowledge_rag": true,
+    "accounting_tools": true,
     "generate_report": true,
     "list_reports": true,
-    "accounting_tools": false,
-    "knowledge_rag": true
-  }
+    "search_conversations": true,
+    "send_email": true,
+    "send_webhook": true
+  },
+  "version": 4,
+  "setup_completed_at": "2026-08-02T03:00:17.357039"
 }

@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import httpx
 
-from tools.registry import registry, Tool
+from tools.registry import registry
 
 
 @registry.register(

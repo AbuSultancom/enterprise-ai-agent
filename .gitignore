@@ -35,3 +35,7 @@ config/accounting_schema.json
 
 # Embedded git repos
 enterprise-ai-agent/
+
+# Local config backups
+backups/
+settings.json
