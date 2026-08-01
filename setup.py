@@ -349,6 +349,7 @@ class ConfigManager:
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 DB_DRIVERS = {
+    "oracle":     "oracle+oracledb",
     "mssql":      "mssql+pyodbc",
     "mysql":      "mysql+pymysql",
     "postgresql": "postgresql+psycopg2",
@@ -356,13 +357,15 @@ DB_DRIVERS = {
 }
 
 DB_DISPLAY_NAMES = {
-    "mssql":      "Microsoft SQL Server (Onyx Pro / MSSQL)",
+    "oracle":     "Oracle Database (Onyx Pro)",
+    "mssql":      "Microsoft SQL Server",
     "mysql":      "MySQL / MariaDB",
     "postgresql": "PostgreSQL",
     "sqlite":     "SQLite (local file)",
 }
 
 DB_DEFAULT_PORTS = {
+    "oracle":     "1521",
     "mssql":      "1433",
     "mysql":      "3306",
     "postgresql": "5432",
@@ -394,6 +397,10 @@ def build_connection_url(db_type: str, cfg: dict) -> str:
             f"{drv}://{user_part}{host}:{port}/{name}"
             f"?driver={urllib.parse.quote_plus(driver)}&{trust}"
         )
+    if db_type == "oracle":
+        # Oracle uses a service name, not a database path
+        service = cfg.get("db_name", "ORCL") or "ORCL"
+        return f"{drv}://{user_part}{host}:{port}/?service_name={service}"
     return f"{drv}://{user_part}{host}:{port}/{name}"
 
 
@@ -401,7 +408,9 @@ def test_db_connection(url: str) -> tuple[bool, str]:
     """Test a database connection; returns (success, message)."""
     try:
         from sqlalchemy import create_engine, text  # type: ignore
-        engine = create_engine(url, connect_args={"timeout": 8}, pool_pre_ping=True)
+        # Oracle's driver does not accept the pyodbc-style "timeout" connect arg
+        connect_args = {} if url.startswith("oracle") else {"timeout": 8}
+        engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         engine.dispose()
@@ -873,6 +882,7 @@ class CLIWizard:
 
         # Logical key (internal identifier)
         default_key_map = {
+            "oracle":     "onyxdb",
             "mssql":      "onyxdb",
             "mysql":      "mysqldb",
             "postgresql": "pgdb",
@@ -932,10 +942,11 @@ class CLIWizard:
                     hint=f"default is {DB_DEFAULT_PORTS[db_type]}",
                 ) or DB_DEFAULT_PORTS[db_type]
 
+                is_oracle = db_type == "oracle"
                 conn_cfg["db_name"] = ask(
-                    "Database name",
+                    "Service name" if is_oracle else "Database name",
                     required=True,
-                    hint="e.g. OnyxDB, CompanyDB",
+                    hint="e.g. ORCL or ORCLPDB1" if is_oracle else "e.g. OnyxDB, CompanyDB",
                 ) or ""
 
                 conn_cfg["username"] = ask(

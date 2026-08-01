@@ -141,15 +141,19 @@ def _build_url(form: dict) -> str:
     user_at = f"{user}:{pw}@" if user else ""
 
     drv_map = {
+        "oracle":     "oracle+oracledb",
         "mssql":      "mssql+pyodbc",
         "mysql":      "mysql+pymysql",
         "postgresql": "postgresql+psycopg2",
     }
-    drv = drv_map.get(db_type, "mssql+pyodbc")
+    drv = drv_map.get(db_type, "oracle+oracledb")
 
     if db_type == "mssql":
         odbc = urllib.parse.quote_plus(form.get("odbc_driver", "ODBC Driver 18 for SQL Server"))
         return f"{drv}://{user_at}{host}:{port}/{db_name}?driver={odbc}&TrustServerCertificate=yes"
+    if db_type == "oracle":
+        service = db_name or "ORCL"
+        return f"{drv}://{user_at}{host}:{port}/?service_name={service}"
     return f"{drv}://{user_at}{host}:{port}/{db_name}"
 
 
@@ -240,7 +244,9 @@ async def test_db(request: Request):
 
     try:
         from sqlalchemy import create_engine, text  # type: ignore
-        engine = create_engine(full_url, connect_args={"timeout": 8}, pool_pre_ping=True)
+        # Oracle's driver does not accept the pyodbc-style "timeout" connect arg
+        connect_args = {} if full_url.startswith("oracle") else {"timeout": 8}
+        engine = create_engine(full_url, connect_args=connect_args, pool_pre_ping=True)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         engine.dispose()
@@ -911,7 +917,8 @@ function updateDefaults(p) {{
   <div class="form-group">
     <label>Database Type</label>
     <select name="db_type" onchange="toggleDbFields(this.value)">
-      <option value="mssql">Microsoft SQL Server (Onyx Pro / MSSQL)</option>
+      <option value="oracle">Oracle Database (Onyx Pro)</option>
+      <option value="mssql">Microsoft SQL Server</option>
       <option value="mysql">MySQL / MariaDB</option>
       <option value="postgresql">PostgreSQL</option>
       <option value="sqlite">SQLite (local file)</option>
@@ -1005,8 +1012,8 @@ function toggleDbFields(t) {{
   document.getElementById('db-server-fields').style.display = t==='sqlite'?'none':'block';
   document.getElementById('db-sqlite-fields').style.display = t==='sqlite'?'block':'none';
   document.getElementById('odbc-row').style.display = t==='mssql'?'block':'none';
-  const ports = {{mssql:'1433',mysql:'3306',postgresql:'5432'}};
-  document.getElementById('db-port').value = ports[t]||'5432';
+  const ports = {{oracle:'1521',mssql:'1433',mysql:'3306',postgresql:'5432'}};
+  document.getElementById('db-port').value = ports[t]||'1521';
   buildAndPreviewUrl();
 }}
 document.getElementById('acct-toggle').addEventListener('change', function() {{
