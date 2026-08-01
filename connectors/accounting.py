@@ -147,16 +147,16 @@ QUERY_TEMPLATES: dict[str, str] = {
     """,
     "revenue_by_month": """
         SELECT
-            FORMAT({sales_invoices.alias}.{sales_invoices.col.date}, 'yyyy-MM') AS month,
+            TO_CHAR({sales_invoices.alias}.{sales_invoices.col.date}, 'YYYY-MM') AS month,
             SUM({sales_invoices.alias}.{sales_invoices.col.net_total}) AS revenue
         FROM {sales_invoices.table} {sales_invoices.alias}
         WHERE {sales_invoices.alias}.{sales_invoices.col.date} BETWEEN :start AND :end
           AND {sales_invoices.alias}.{sales_invoices.col.status} = 'Posted'
-        GROUP BY FORMAT({sales_invoices.alias}.{sales_invoices.col.date}, 'yyyy-MM')
+        GROUP BY TO_CHAR({sales_invoices.alias}.{sales_invoices.col.date}, 'YYYY-MM')
         ORDER BY month
     """,
     "top_customers": """
-        SELECT TOP (:limit)
+        SELECT
             {customers.alias}.{customers.col.name} AS customer_name,
             SUM({sales_invoices.alias}.{sales_invoices.col.net_total}) AS total_sales,
             COUNT(DISTINCT {sales_invoices.alias}.{sales_invoices.col.number}) AS invoices
@@ -167,6 +167,7 @@ QUERY_TEMPLATES: dict[str, str] = {
           AND {sales_invoices.alias}.{sales_invoices.col.status} = 'Posted'
         GROUP BY {customers.alias}.{customers.col.name}
         ORDER BY total_sales DESC
+        FETCH FIRST :limit ROWS ONLY
     """,
     "expenses_summary": """
         SELECT
