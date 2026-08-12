@@ -19,6 +19,12 @@ import io
 import json
 import locale
 import re
+
+# When pip/setuptools invoke this file (editable install, wheel build), act as
+# the real package setup and DON'T run the wizard — the wizard's own argparse
+# CLI would reject pip's args like "egg_info" / "editable_wheel" and break
+# `pip install -e .`.
+import re as _re
 import secrets
 import shutil
 import subprocess
@@ -28,12 +34,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-# When pip/setuptools invoke this file (editable install, wheel build), act as
-# the real package setup and DON'T run the wizard — the wizard's own argparse
-# CLI would reject pip's args like "egg_info" / "editable_wheel" and break
-# `pip install -e .`.
-import re as _re
 
 _PIP_SETUP_CMDS = _re.compile(
     r"^(egg_info|dist_info|build|build_py|build_ext|sdist|bdist|bdist_wheel|bdist_egg|"
