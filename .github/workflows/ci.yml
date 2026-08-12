@@ -1,0 +1,77 @@
+name: CI — Enterprise AI Agent
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests — Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint with Ruff
+        run: |
+          ruff check . --output-format=github
+          ruff format --check .
+
+      - name: Security scan with Bandit
+        run: bandit -r agent_core api llm_gateway memory tools connectors orchestrator -ll -q
+        continue-on-error: true  # warn, don't block
+
+      - name: Run tests with coverage
+        env:
+          ADMIN_KEY: ci-admin-key-for-testing
+          USER_KEY: ci-user-key-for-testing
+        run: |
+          pytest tests/ -v \
+            --cov=agent_core \
+            --cov=api \
+            --cov=llm_gateway \
+            --cov=memory \
+            --cov=tools \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=50 \
+            -m "not integration and not slow"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  release:
+    name: Auto Release
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

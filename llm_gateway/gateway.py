@@ -1,13 +1,36 @@
-"""Unified LLM gateway: route requests to local (Ollama) or cloud (OpenAI-compatible) providers."""
+"""Unified LLM gateway: route requests to Ollama, OpenAI-compatible, HuggingFace,
+Anthropic Claude, or Google Gemini providers, with automatic fallback and retry."""
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+
+# ─── Retry helper ─────────────────────────────────────────────────────────────
+
+async def _retry(coro_fn, retries: int = 3, base_delay: float = 1.0):
+    """Run *coro_fn()* with exponential-backoff retries on transient errors."""
+    last_err: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return await coro_fn()
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+            last_err = exc
+            if attempt < retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning("LLM request failed (attempt %d/%d), retrying in %.1fs: %s",
+                               attempt + 1, retries, delay, exc)
+                await asyncio.sleep(delay)
+    raise last_err  # type: ignore[misc]
 
 
 @dataclass
@@ -207,6 +230,116 @@ class HuggingFaceProvider(BaseProvider):
         )
 
 
+class AnthropicProvider(BaseProvider):
+    """Anthropic Claude via the native Messages API.
+
+    Set ANTHROPIC_API_KEY in your .env to enable.
+    Models: claude-3-5-sonnet-20241022, claude-3-haiku-20240307, etc.
+    """
+
+    name = "anthropic"
+    BASE_URL = "https://api.anthropic.com/v1"
+    API_VERSION = "2023-06-01"
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
+
+    async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
+        if not self.api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+        # Separate system message from user/assistant messages
+        system_text = ""
+        anthropic_messages: list[dict] = []
+        for m in messages:
+            if m.role == "system":
+                system_text = m.content
+            else:
+                anthropic_messages.append({"role": m.role, "content": m.content})
+
+        payload: dict = {
+            "model": model,
+            "max_tokens": kw.get("max_tokens", 4096),
+            "temperature": kw.get("temperature", 0.3),
+            "messages": anthropic_messages,
+        }
+        if system_text:
+            payload["system"] = system_text
+
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": self.API_VERSION,
+            "Content-Type": "application/json",
+        }
+        async def _call():
+            async with httpx.AsyncClient(timeout=120) as client:
+                r = await client.post(f"{self.BASE_URL}/messages", json=payload, headers=headers)
+                r.raise_for_status()
+                data = r.json()
+            return LLMResponse(
+                content=data["content"][0]["text"],
+                model=model,
+                provider=self.name,
+                usage=data.get("usage", {}),
+            )
+        return await _retry(_call)
+
+
+class GeminiProvider(BaseProvider):
+    """Google Gemini via the Generative Language REST API.
+
+    Set GEMINI_API_KEY in your .env to enable.
+    Models: gemini-2.0-flash, gemini-1.5-pro, gemini-1.5-flash, etc.
+    """
+
+    name = "gemini"
+    BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+
+    async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+
+        # Convert to Gemini content format
+        contents: list[dict] = []
+        system_text = ""
+        for m in messages:
+            if m.role == "system":
+                system_text = m.content
+                continue
+            role = "model" if m.role == "assistant" else "user"
+            contents.append({"role": role, "parts": [{"text": m.content}]})
+
+        payload: dict = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": kw.get("temperature", 0.3),
+                "maxOutputTokens": kw.get("max_tokens", 4096),
+            },
+        }
+        if system_text:
+            payload["systemInstruction"] = {"parts": [{"text": system_text}]}
+
+        url = f"{self.BASE_URL}/models/{model}:generateContent?key={self.api_key}"
+
+        async def _call():
+            async with httpx.AsyncClient(timeout=120) as client:
+                r = await client.post(url, json=payload)
+                r.raise_for_status()
+                data = r.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage = data.get("usageMetadata", {})
+            return LLMResponse(
+                content=text,
+                model=model,
+                provider=self.name,
+                usage=usage,
+            )
+        return await _retry(_call)
+
+
 class PIIMasker:
     """Enterprise PII and Sensitive Data Masker.
     Masks sensitive data (credit cards, national IDs, tokens, keys) before sending payloads to cloud LLMs.
@@ -236,14 +369,17 @@ class PIIMasker:
 
 
 class LLMGateway:
-    """Single entry point. Picks provider by prefix: 'ollama:model',
-    'openai:model', or 'huggingface:model', with automatic fallback capability."""
+    """Single entry point. Picks provider by prefix:
+    'ollama:model', 'openai:model', 'anthropic:model', 'gemini:model',
+    or 'huggingface:model', with automatic fallback and retry."""
 
     def __init__(self):
         self.providers: dict[str, BaseProvider] = {
             "ollama": OllamaProvider(),
             "openai": OpenAICompatibleProvider(),
             "huggingface": HuggingFaceProvider(),
+            "anthropic": AnthropicProvider(),
+            "gemini": GeminiProvider(),
         }
 
     async def chat(self, messages: list[Message], model: str | None = None, mask_pii: bool = True, **kw) -> LLMResponse:
@@ -279,7 +415,7 @@ class LLMGateway:
             raise primary_err
 
     async def health(self) -> dict[str, bool]:
-        status = {}
+        status: dict[str, bool] = {}
         async with httpx.AsyncClient(timeout=5) as client:
             try:
                 r = await client.get(f"{self.providers['ollama'].base_url}/api/tags")
@@ -287,6 +423,9 @@ class LLMGateway:
             except Exception:
                 status["ollama"] = False
         status["openai"] = bool(self.providers["openai"].api_key)
+        status["anthropic"] = bool(self.providers["anthropic"].api_key)
+        status["gemini"] = bool(self.providers["gemini"].api_key)
+        status["huggingface"] = bool(self.providers["huggingface"].api_key)
         return status
 
     async def chat_vision(self, text: str, image_data: str, image_type: str = "url",

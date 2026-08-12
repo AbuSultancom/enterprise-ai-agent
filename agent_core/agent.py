@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from llm_gateway.gateway import LLMGateway, Message
@@ -160,8 +161,11 @@ class Agent:
                         observation = await tool.run(**args)
                         AuditLogger.log_tool_call(tool_name, args, user_id, status="SUCCESS", result_snippet=str(observation))
                     except Exception as e:
-                        observation = f"Error running {tool_name}: {e}"
+                        # Log full error internally; expose only a sanitised message to the LLM
+                        _log = logging.getLogger(__name__)
+                        _log.error("Tool %s raised: %s", tool_name, e, exc_info=True)
                         AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=str(e))
+                        observation = f"Tool '{tool_name}' encountered an error. Try adjusting your arguments."
 
             steps.append({"tool": tool_name, "arguments": args, "observation": observation[:2000]})
             messages.append(Message(role="assistant", content=content))
@@ -227,8 +231,10 @@ class Agent:
                         observation = await tool.run(**args)
                         AuditLogger.log_tool_call(tool_name, args, user_id, status="SUCCESS", result_snippet=str(observation))
                     except Exception as e:
-                        observation = f"Error running {tool_name}: {e}"
+                        _log = logging.getLogger(__name__)
+                        _log.error("Tool %s raised: %s", tool_name, e, exc_info=True)
                         AuditLogger.log_tool_call(tool_name, args, user_id, status="ERROR", result_snippet=str(e))
+                        observation = f"Tool '{tool_name}' encountered an error. Try adjusting your arguments."
 
             yield {"type": "step", "tool": tool_name, "arguments": args}
             messages.append(Message(role="assistant", content=buffer))

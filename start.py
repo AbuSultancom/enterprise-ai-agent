@@ -547,12 +547,12 @@ def main() -> None:
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
 
     port = args.port
-    children: list[subprocess.Popen] = []
+    children: list[tuple[subprocess.Popen, str]] = []  # (proc, cwd) — cwd needed for correct restarts
 
     def shutdown(*_):
         print()
         print(c("\n  🛑  Stopping all services...", "y", "bold"))
-        for p in children:
+        for p, _cwd in children:
             try:
                 p.terminate()
             except Exception:
@@ -578,7 +578,7 @@ def main() -> None:
     agent = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "api.main:app"] + uvicorn_args,
         cwd=ROOT, env=env)
-    children.append(agent)
+    children.append((agent, ROOT))
 
     # Wait for API
     if wait_for_api(port):
@@ -597,7 +597,7 @@ def main() -> None:
         wa_env.setdefault("AGENT_URL", f"http://localhost:{port}")
         wa_env.setdefault("WHATSAPP_PORT", "3001")
         wa = subprocess.Popen([node_cmd_path, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
-        children.append(wa)
+        children.append((wa, os.path.join(ROOT, "whatsapp")))
 
     # Start Telegram
     telegram_on = (
@@ -612,7 +612,7 @@ def main() -> None:
         tg = subprocess.Popen(
             [sys.executable, os.path.join(ROOT, "telegram", "bridge.py")],
             cwd=ROOT, env=tg_env)
-        children.append(tg)
+        children.append((tg, ROOT))
 
     # ═══════════════════════════════════════════
     #  PHASE 7: Summary
@@ -646,10 +646,10 @@ def main() -> None:
     # ═══════════════════════════════════════════
     #  PHASE 8: Keep alive with auto-restart
     # ═══════════════════════════════════════════
-    MAX_RESTARTS = 3
+    MAX_RESTARTS = 10
     restart_counts: dict[int, int] = {}
     while True:
-        for i, p in enumerate(children):
+        for i, (p, cwd) in enumerate(children):
             code = p.poll()
             if code is not None:
                 restart_counts[i] = restart_counts.get(i, 0) + 1
@@ -657,8 +657,8 @@ def main() -> None:
                     print(c(f"\n  ✖ Service {i} crashed {MAX_RESTARTS} times. Stopping.", "r"))
                     shutdown()
                 print(c(f"\n  ⚠ Service {i} crashed (code {code}). Restarting...", "y"))
-                new_p = subprocess.Popen(p.args, cwd=ROOT, env=env)
-                children[i] = new_p
+                new_p = subprocess.Popen(p.args, cwd=cwd, env=env)
+                children[i] = (new_p, cwd)
         time.sleep(1)
 
 

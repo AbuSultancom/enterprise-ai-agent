@@ -1,27 +1,25 @@
 {
   "agent": {
+    "name": "Test Agent",
     "language": "en",
-    "name": "Enterprise AI Agent",
     "personality": "a professional, concise enterprise assistant",
     "reply_language": "auto"
   },
-  "llm_provider": "ollama",
-  "llm_model": "qwen3.5",
-  "channels": {
-    "web": {
-      "enabled": true,
-      "port": 8000
-    },
-    "whatsapp": {
-      "enabled": true,
-      "prefix": "!"
-    },
-    "telegram": {
-      "enabled": true
-    }
+  "permissions": {
+    "web_search": true,
+    "calculator": true,
+    "get_current_time": true,
+    "read_file": true,
+    "accounting_tools": true,
+    "knowledge_rag": true,
+    "generate_report": true,
+    "list_reports": true,
+    "search_conversations": true,
+    "send_email": true,
+    "send_webhook": true
   },
   "accounting": {
-    "enabled": true,
+    "enabled": false,
     "read_only": true,
     "allowed_queries": [
       "sales_summary",
@@ -29,24 +27,26 @@
       "top_customers",
       "expenses_summary",
       "invoice_lookup",
-      "cash_balance",
-      "vendor_balances",
-      "sales_by_item"
+      "cash_balance"
     ]
   },
-  "permissions": {
-    "web_search": true,
-    "calculator": true,
-    "get_current_time": true,
-    "read_file": true,
-    "knowledge_rag": true,
-    "accounting_tools": true,
-    "generate_report": true,
-    "list_reports": true,
-    "search_conversations": true,
-    "send_email": true,
-    "send_webhook": true
+  "llm_provider": "deepseek",
+  "llm_model": "deepseek-chat",
+  "channels": {
+    "web": {
+      "enabled": true,
+      "port": 8000
+    },
+    "whatsapp": {
+      "enabled": true,
+      "prefix": "!",
+      "allowed_numbers": "00601115604394",
+      "admin_numbers": ""
+    },
+    "telegram": {
+      "enabled": false
+    }
   },
   "version": 4,
-  "setup_completed_at": "2026-08-02T03:00:17.357039"
+  "setup_completed_at": "2026-08-12T23:39:24.150232"
 }

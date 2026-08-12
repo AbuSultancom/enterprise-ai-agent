@@ -1455,7 +1455,8 @@ const I18N = {
 let lang = localStorage.getItem('dashboardLang') || 'en';
 let currentConv = null;
 let loading = false;
-let apiKey = localStorage.getItem('apiKey') || '';
+// Security: API key stored in sessionStorage (cleared on tab close, not persisted cross-session)
+let apiKey = sessionStorage.getItem('apiKey') || '';
 let allConvs = [];
 let pinnedConvs = JSON.parse(localStorage.getItem('pinnedConvs')||'[]');
 let toolCount = 33;
@@ -2384,7 +2385,7 @@ function downloadChat() {
 
 function saveKey(){
   const k=document.getElementById('apiKeyInput').value.trim();
-  if(k){apiKey=k;localStorage.setItem('apiKey',k);toast(t('key_saved'))}
+  if(k){apiKey=k;sessionStorage.setItem('apiKey',k);toast(t('key_saved'))}
 }
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open')})});

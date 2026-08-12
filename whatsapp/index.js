@@ -74,6 +74,10 @@ let status = 'initializing'; // initializing | qr | ready | disconnected
 const DATA_PATH = process.env.WA_DATA_PATH || './.wwebjs_auth';
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
+  // Pin the WhatsApp Web version to the newest cached build (2.3000.1045028006).
+  // WhatsApp serves multiple app builds round-robin and some hang with the
+  // library's injected hooks; pinning makes every attempt use the same build.
+  webVersion: '2.3000.1045028006',
   puppeteer: {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
@@ -101,6 +105,47 @@ client.on('disconnected', (reason) => {
   status = 'disconnected';
   console.log('Disconnected:', reason);
 });
+
+// ── Auto-dismiss WhatsApp Web announcement dialogs (e.g. "What's new") ──
+// The modal appears on load and can block the client's 'ready' signal
+// (symptom: stuck on "initializing" forever). Dismiss it until ready.
+let _modalTimer = null;
+function startModalDismisser() {
+  if (_modalTimer) clearInterval(_modalTimer);
+  _modalTimer = setInterval(async () => {
+    if (status === 'ready') {
+      clearInterval(_modalTimer);
+      _modalTimer = null;
+      return;
+    }
+    try {
+      const page = await client.pupPage;
+      await page.evaluate(() => {
+        const dialogs = [...document.querySelectorAll('[role="dialog"], [data-testid="dialog"]')]
+          .filter(d => d.offsetParent !== null);
+        for (const dlg of dialogs) {
+          const btn = [...dlg.querySelectorAll('[role="button"], button')]
+            .find(b => /continue|close|dismiss|got it|ok|next|done|skip/i.test(
+              (b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')));
+          if (btn) { btn.click(); return; }
+        }
+        if (dialogs.length) {
+          document.body.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        }
+      });
+    } catch (e) { /* page not ready yet — retry next tick */ }
+  }, 4000);
+}
+startModalDismisser();
+
+// ── Init watchdog: if the client never becomes ready, exit so the launcher restarts it ──
+setTimeout(() => {
+  if (status !== 'ready') {
+    console.log('[bridge] init watchdog: not ready after 90s — restarting...');
+    process.exit(1);
+  }
+}, 90000);
 
 // Pick the API key by role: self-chat & ADMIN_NUMBERS -> admin key, others -> user key.
 function keyForSender(senderDigits, fromMe) {
@@ -181,10 +226,69 @@ async function readImage(base64Data, mimetype, question) {
   return data.choices?.[0]?.message?.content || null;
 }
 
+// Resolve a sender JID to plain phone digits.
+// WhatsApp now sends DMs from LIDs ("122991203614789@lid") instead of the
+// phone-number JID ("601115604394@c.us"), which broke ALLOWED_NUMBERS /
+// ADMIN_NUMBERS checks. This maps the LID back to the real phone number.
+async function resolveSenderNumber(msg) {
+  const jid = msg.from;
+  const lidDigits = jid.replace(/\D/g, '');
+  if (!jid.endsWith('@lid')) return lidDigits;
+  const dbg = (m) => console.log(`[resolve] ${m}`);
+  // 0) The raw message event often carries the resolved phone-based sender wid.
+  try {
+    const d = msg._data || {};
+    const raw = d.sender || d.author || d.id;
+    const sid = (raw && (raw._serialized || (raw.remote && raw.remote._serialized))) || '';
+    const n = String(sid).replace(/\D/g, '');
+    if (sid.endsWith('@c.us') && n && n !== lidDigits) {
+      dbg(`via _data.sender: ${sid}`);
+      return n;
+    }
+  } catch (e) { dbg('_data path err: ' + e.message); }
+  // 1) Library lookup: the web client resolves LID -> Contact, and the real
+  //    phone number lives in contact.id ("601115604394@c.us") — NOT in
+  //    contact.number, which still holds the LID digits on current builds.
+  try {
+    const contact = await client.getContactById(jid);
+    const idStr = contact && contact.id && (contact.id.user || String(contact.id._serialized || '').split('@')[0]);
+    const n = String(idStr || '').replace(/\D/g, '');
+    if (n && n !== lidDigits) {
+      dbg(`via getContactById: ${n} (id=${contact.id._serialized})`);
+      return n;
+    }
+  } catch (e) { dbg('getContactById failed: ' + e.message); }
+  // 2) Fallback: scan the contact store for the model carrying this LID.
+  try {
+    const n = await client.pupPage.evaluate((lidJid) => {
+      const req = window.require;
+      const store = req('WAWebCollections').Contact;
+      const models = (store && store.models) || [];
+      const byLid = models.find(m => m.lid && (m.lid._serialized || String(m.lid)) === lidJid);
+      if (byLid && byLid.id && byLid.id._serialized !== lidJid) return byLid.id.user;
+      try {
+        const wid = req('WAWebWidFactory').createWid(lidJid);
+        const byGet = store && store.get(wid);
+        if (byGet && byGet.id && byGet.id._serialized !== lidJid) return byGet.id.user;
+      } catch (e2) { /* wid factory unavailable */ }
+      return null;
+    }, jid);
+    if (n) {
+      dbg(`via store scan: ${n}`);
+      return String(n).replace(/\D/g, '');
+    }
+  } catch (e) { dbg('store scan failed: ' + e.message); }
+  dbg('UNRESOLVED — whitelist will reject');
+  return lidDigits; // unresolved — whitelist check will reject (previous behavior)
+}
+
 client.on('message', async (msg) => {
   try {
     const chatId = msg.from;
-    const sender = msg.from.replace(/\D/g, '');
+    const sender = await resolveSenderNumber(msg);
+    if (sender !== msg.from.replace(/\D/g, '')) {
+      console.log(`[msg] LID ${msg.from} -> phone ${sender}`);
+    }
 
     // Skip status updates (broadcasts from status@broadcast)
     if (msg.from === 'status@broadcast') return;

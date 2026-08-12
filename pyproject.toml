@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "enterprise-ai-agent"
+version = "0.6.0"
+description = "A self-hosted, open-source AI agent platform designed for enterprises."
+authors = [{ name = "AbuSultancom" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Core dependencies (always installed)
+dependencies = [
+    "fastapi==0.115.5",
+    "uvicorn[standard]==0.32.1",
+    "httpx==0.27.2",
+    "pydantic==2.10.3",
+    "sqlalchemy==2.0.36",
+    "python-multipart==0.0.12",
+    "pypdf==5.1.0",
+    "python-docx==1.1.2",
+    "python-dotenv==1.0.1",
+]
+
+[project.optional-dependencies]
+# pip install -e ".[erp]"
+erp = [
+    "pyodbc==5.2.0",
+]
+
+# pip install -e ".[dev]"
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "pytest-cov==6.0.0",
+    "httpx==0.27.2",
+    "ruff==0.8.3",
+    "bandit==1.8.0",
+]
+
+# pip install -e ".[all]"
+all = [
+    "enterprise-ai-agent[erp,dev]",
+]
+
+[project.scripts]
+# Run the agent: enterprise-ai-agent
+enterprise-ai-agent = "start:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "docs*", "venv*", ".github*"]
+
+# ─── Ruff (Linter + Formatter) ───────────────────────────────────────────────
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in default arguments (FastAPI pattern)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ─── Pytest ──────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "-q",
+]
+markers = [
+    "asyncio: marks tests as async",
+    "slow: marks tests as slow (use -m 'not slow' to skip)",
+    "integration: marks integration tests requiring live services",
+]
+
+# ─── Coverage ────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = [
+    "agent_core",
+    "api",
+    "connectors",
+    "llm_gateway",
+    "memory",
+    "orchestrator",
+    "tools",
+]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "setup.py",
+    "setup_web.py",
+    "start.py",
+    "demo.py",
+]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+skip_covered = false

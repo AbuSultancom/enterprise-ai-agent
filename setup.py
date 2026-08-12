@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import io
 import json
 import locale
 import os
@@ -32,6 +33,16 @@ from typing import Any
 ROOT = Path(__file__).parent.resolve()
 CONFIG_DIR = ROOT / "config"
 CONFIG_DIR.mkdir(exist_ok=True)
+
+# ── Windows UTF-8 console fix ─────────────────────────────────────────────
+# Prevents UnicodeEncodeError on Windows terminals running legacy cp1252
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except (AttributeError, io.UnsupportedOperation):
+        # Python < 3.7 or non-reconfigurable stream — best effort only
+        pass
 
 ENV_FILE = ROOT / ".env"
 SETTINGS_FILE = ROOT / "settings.json"          # legacy flat file
@@ -493,10 +504,11 @@ class CLIWizard:
     def __init__(self, cfg: ConfigManager, update_mode: bool = False):
         self.cfg = cfg
         self.update_mode = update_mode
-        # Carry over existing values so update mode keeps unmodified fields
-        self.existing_env      = cfg.load_env() if update_mode else {}
-        self.existing_settings = cfg.load_settings() if update_mode else {}
-        self.existing_schema   = cfg.load_schema() if update_mode else {}
+        # Always load existing values so the wizard can detect prior configuration
+        # and offer "reconfigure all" or "keep existing" at startup.
+        self.existing_env      = cfg.load_env()
+        self.existing_settings = cfg.load_settings()
+        self.existing_schema   = cfg.load_schema()
 
         self.env:      dict[str, str] = dict(self.existing_env)
         self.settings: dict[str, Any] = dict(self.existing_settings)
@@ -521,16 +533,43 @@ class CLIWizard:
 
     def run(self) -> None:
         banner(L["welcome_title"])
+        has_existing = bool(self.existing_env or self.existing_settings)
+
         if self.update_mode:
             self._info(L["update_mode"])
+        elif has_existing:
+            # Existing configuration detected — quick path or per-option mode.
+            print()
+            self._info("Existing configuration detected.")
+            if ask_yes("Do you want to reconfigure ALL options?", default=False):
+                self.env.clear()
+                self.settings.clear()
+                self.schema.clear()
+                self.existing_env      = {}
+                self.existing_settings = {}
+                self.existing_schema   = {}
+                has_existing = False
+                self._ok("Starting fresh configuration...")
+            else:
+                self._info("Per-option mode: you can edit each setting or skip it.")
 
-        self.step_language()
-        self.step_llm()
-        self.step_identity()
-        self.step_security()
-        self.step_channels()
-        self.step_database()
-        self.step_permissions()
+        # Each option asks "edit or skip" when a previous configuration exists.
+        steps = [
+            ("Language",            self.step_language),
+            ("LLM Provider/Model",  self.step_llm),
+            ("Agent Identity",      self.step_identity),
+            ("Security & API Keys", self.step_security),
+            ("Channels",            self.step_channels),
+            ("Database",            self.step_database),
+            ("Permissions",         self.step_permissions),
+        ]
+        for title, fn in steps:
+            if has_existing:
+                if not ask_yes(f"Edit {title}?", default=False):
+                    self._ok(f"Skipped {title} — kept existing settings.")
+                    continue
+            fn()
+
         self.step_finalize()
 
     # ──────────────────────────────────────────────────────────────────────
@@ -750,10 +789,36 @@ class CLIWizard:
         channels["web"] = {"enabled": True, "port": int(web_port or 8000)}
 
         # WhatsApp
-        if ask_yes("Enable WhatsApp integration?", default=False):
+        wa_current = bool(channels.get("whatsapp", {}).get("enabled", False))
+        if ask_yes("Enable WhatsApp integration?", default=wa_current):
             prefix = ask("Command prefix", default="!", hint="character users type before commands")
-            channels["whatsapp"] = {"enabled": True, "prefix": prefix or "!"}
+            allowed = ask(
+                "Allowed number(s)",
+                default="",
+                hint="international format, comma-separated: 9665xxxxxxxx,8613xxxxxxxx (empty = everyone)",
+            )
+            admins = ask(
+                "Admin number(s)",
+                default="",
+                hint="numbers with admin powers (accounting) - empty = none",
+            )
+            channels["whatsapp"] = {
+                "enabled": True,
+                "prefix": prefix or "!",
+                "allowed_numbers": allowed.strip(),
+                "admin_numbers": admins.strip(),
+            }
+            self.env["BOT_PREFIX"] = prefix or "!"
+            if allowed.strip():
+                self.env["ALLOWED_NUMBERS"] = allowed.strip()
+            if admins.strip():
+                self.env["ADMIN_NUMBERS"] = admins.strip()
             self._info("Requires WhatsApp Business API or Baileys bridge running locally.")
+            if ask_yes(
+                "Reset WhatsApp session? (deletes the saved login so a NEW QR appears)",
+                default=False,
+            ):
+                self._reset_whatsapp_session()
         else:
             channels.setdefault("whatsapp", {"enabled": False})
 
@@ -802,6 +867,59 @@ class CLIWizard:
     # ──────────────────────────────────────────────────────────────────────
     # STEP 6 — Database / Accounting Setup   ★  THE MAIN NEW SECTION  ★
     # ──────────────────────────────────────────────────────────────────────
+
+    def _reset_whatsapp_session(self) -> None:
+        """Delete the saved WhatsApp session so a fresh QR is shown on next start."""
+        import shutil
+
+        session_dir = ROOT / "whatsapp" / ".wwebjs_auth"
+        if not session_dir.exists():
+            self._info("No saved WhatsApp session found — nothing to reset.")
+            return
+
+        try:
+            shutil.rmtree(session_dir)
+        except OSError:
+            self._warn("Session is locked by the running WhatsApp bridge — stopping it first...")
+            if self._stop_whatsapp_bridge():
+                try:
+                    shutil.rmtree(session_dir)
+                except OSError as exc:
+                    self._warn(f"Still could not delete session: {exc}")
+                    return
+            else:
+                self._warn("Could not find the bridge process — close the app and run setup again.")
+                return
+
+        self._ok("WhatsApp session deleted — a NEW QR will be shown on next start.")
+        self._info("Restart the app (python start.py), then scan the QR at http://localhost:3001")
+
+    def _stop_whatsapp_bridge(self) -> bool:
+        """Stop the node process running the WhatsApp bridge (whatsapp/index.js)."""
+        import subprocess
+        import time
+
+        try:
+            out = subprocess.run(
+                [
+                    "powershell.exe", "-NoProfile", "-Command",
+                    "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | "
+                    "Where-Object { $_.CommandLine -match 'index\\.js' -and "
+                    "$_.CommandLine -notmatch 'openclaw|node_modules|\\\\dist' } | "
+                    "ForEach-Object { $_.ProcessId }",
+                ],
+                capture_output=True, text=True, timeout=20,
+            )
+            pids = [p for p in out.stdout.split() if p.isdigit()]
+            if not pids:
+                return False
+            for pid in pids:
+                subprocess.run(["taskkill", "/PID", pid, "/F"],
+                               capture_output=True, timeout=15)
+            time.sleep(2)  # let the OS release the file locks
+            return True
+        except Exception:
+            return False
 
     def step_database(self) -> None:
         self._header(6, L["step6"])

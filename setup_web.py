@@ -115,6 +115,47 @@ def _write_schema(schema: dict) -> None:
     SCHEMA_FILE.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _reset_whatsapp_session() -> None:
+    """Delete the saved WhatsApp session so a fresh QR is shown on next start."""
+    import shutil
+
+    session_dir = BASE_DIR / "whatsapp" / ".wwebjs_auth"
+    if not session_dir.exists():
+        return
+    try:
+        shutil.rmtree(session_dir)
+    except OSError:
+        # Session is locked by the running bridge — stop it, then retry.
+        _stop_whatsapp_bridge()
+        try:
+            shutil.rmtree(session_dir)
+        except OSError:
+            pass  # best-effort; the user is told to close the app if it fails
+
+
+def _stop_whatsapp_bridge() -> None:
+    """Best-effort stop of the node process running whatsapp/index.js."""
+    import subprocess
+    import time
+
+    try:
+        out = subprocess.run(
+            [
+                "powershell.exe", "-NoProfile", "-Command",
+                "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | "
+                "Where-Object { $_.CommandLine -match 'index\\.js' -and "
+                "$_.CommandLine -notmatch 'openclaw|node_modules|\\\\dist' } | "
+                "ForEach-Object { $_.ProcessId }",
+            ],
+            capture_output=True, text=True, timeout=20,
+        )
+        for pid in (p for p in out.stdout.split() if p.isdigit()):
+            subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=15)
+        time.sleep(2)
+    except Exception:
+        pass
+
+
 def _backup() -> str:
     BACKUP_DIR.mkdir(exist_ok=True)
     ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -357,7 +398,22 @@ async def _finalize(sid: str) -> None:
             port = int(step_data.get("web_port", 8000))
             channels["web"] = {"enabled": True, "port": port}
             if step_data.get("whatsapp_enabled") == "on":
-                channels["whatsapp"] = {"enabled": True, "prefix": step_data.get("whatsapp_prefix", "!")}
+                prefix = step_data.get("whatsapp_prefix", "!")
+                allowed = step_data.get("whatsapp_allowed", "").strip()
+                admins = step_data.get("whatsapp_admin", "").strip()
+                channels["whatsapp"] = {
+                    "enabled": True,
+                    "prefix": prefix,
+                    "allowed_numbers": allowed,
+                    "admin_numbers": admins,
+                }
+                env_vars["BOT_PREFIX"] = prefix
+                if allowed:
+                    env_vars["ALLOWED_NUMBERS"] = allowed
+                if admins:
+                    env_vars["ADMIN_NUMBERS"] = admins
+                if step_data.get("whatsapp_reset") == "on":
+                    _reset_whatsapp_session()
             else:
                 channels["whatsapp"] = {"enabled": False}
             if step_data.get("telegram_enabled") == "on":
@@ -842,6 +898,17 @@ function updateDefaults(p) {{
       <label>Command Prefix</label>
       <input type="text" name="whatsapp_prefix" value="!" maxlength="3">
     </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Allowed number(s)</label>
+      <input type="text" name="whatsapp_allowed" placeholder="9665xxxxxxxx,8613xxxxxxxx (empty = everyone)">
+      <small class="hint">International format, comma-separated. Only these numbers can talk to the bot.</small>
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label>Admin number(s)</label>
+      <input type="text" name="whatsapp_admin" placeholder="empty = none">
+      <small class="hint">Numbers with admin powers (accounting queries).</small>
+    </div>
+    <label class="toggle-item" style="margin-top:12px"><input type="checkbox" name="whatsapp_reset"> Reset WhatsApp session (new QR on next start)</label>
   </div>
 </div>
 <div class="collapsible">
