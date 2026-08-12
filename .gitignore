@@ -28,6 +28,11 @@ Thumbs.db
 node_modules/
 whatsapp/.wwebjs_auth/
 whatsapp/.wwebjs_cache/
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
 whatsapp/package-lock.json
 
 # Accounting schema (generated from discovery)

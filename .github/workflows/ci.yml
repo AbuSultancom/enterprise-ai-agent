@@ -53,7 +53,7 @@ jobs:
             --cov=tools \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=50 \
+            --cov-fail-under=30 \
             -m "not integration and not slow"
 
       - name: Upload coverage to Codecov

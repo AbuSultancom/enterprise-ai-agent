@@ -11,6 +11,13 @@ import pytest
 # Ensure project root on path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# ─── Deterministic auth keys ─────────────────────────────────────────────────
+# Force fixed test keys BEFORE the FastAPI app is imported so the auth checks
+# behave identically in CI, locally with a real .env, and on any machine.
+os.environ["API_KEYS"] = "admin:test-admin-key,user:test-user-key"
+os.environ["ADMIN_KEY"] = "test-admin-key"
+os.environ["USER_KEY"] = "test-user-key"
+
 
 # ─── Register all tools once per session ─────────────────────────────────────
 
