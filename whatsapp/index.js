@@ -23,7 +23,6 @@ const AGENT_API_KEY = ROLE === 'admin'
   ? (process.env.ADMIN_KEY || 'dev-admin-key')
   : (process.env.USER_KEY || 'dev-user-key');
 const PORT = process.env.WHATSAPP_PORT || 3001;
-const PREFIX = process.env.BOT_PREFIX || ''; // e.g. "!ai " to only reply when prefixed; empty = reply to all
 const IGNORE_GROUPS = process.env.IGNORE_GROUPS !== 'false';
 // Comma-separated phone numbers allowed to talk to the bot (international format,
 // e.g. "9677xxxxxxx,8613xxxxxxxx"). Empty = everyone is allowed.
@@ -98,7 +97,7 @@ client.on('ready', () => {
   status = 'ready';
   qrDataUrl = null;
   console.log('WhatsApp client is ready');
-  console.log(`Listening: prefix=${PREFIX ? JSON.stringify(PREFIX) : '(reply to all)'} · groups=${IGNORE_GROUPS ? 'ignored' : 'allowed'} · allowed=${ALLOWED.length ? ALLOWED.join(',') : 'everyone'}`);
+  console.log(`Listening: groups=${IGNORE_GROUPS ? 'ignored' : 'allowed'} · allowed=${ALLOWED.length ? ALLOWED.join(',') : 'everyone'}`);
 });
 
 client.on('disconnected', (reason) => {
@@ -167,15 +166,15 @@ async function askAgent(text, apiKey, history, sessionId) {
 }
 
 const HELP_TEXT = `🤖 *Bot Commands:*
-• ${PREFIX}summary — Quick summary of today's sales
-• ${PREFIX}invoice 123 — Invoice details by number
-• ${PREFIX}customer John — Summary of customer transactions
-• ${PREFIX}stock — Inventory status
-• ${PREFIX}clear — Clear conversation memory
-• ${PREFIX}help — Show this command list
-Or type any question after ${PREFIX} and I will answer you.`;
+• summary — Quick summary of today's sales
+• invoice 123 — Invoice details by number
+• customer John — Summary of customer transactions
+• stock — Inventory status
+• clear — Clear conversation memory
+• help — Show this command list
+Or just type any question and I will answer you.`;
 
-// Built-in quick commands (matched on the text AFTER the prefix is stripped).
+// Built-in quick commands (matched on the full message text).
 function runCommand(text, chatId) {
   const cmd = text.trim();
   if (cmd === 'help' || cmd === 'commands') return { reply: HELP_TEXT };
@@ -298,9 +297,7 @@ client.on('message', async (msg) => {
     // ---- Image messages (invoice/receipt photos) ----
     if (msg.hasMedia) {
       const caption = (msg.body || '').trim();
-      const allowedImg = msg.fromMe
-        ? (!PREFIX || caption.startsWith(PREFIX) || !caption)
-        : (!ALLOWED.length || ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender)));
+      const allowedImg = !ALLOWED.length || ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender));
       if (!allowedImg) return;
       console.log(`[img] from ${msg.from}`);
       if (!VISION_MODEL) {
@@ -310,7 +307,7 @@ client.on('message', async (msg) => {
       await msg.reply('⏳ Reading the image...');
       try {
         const media = await msg.downloadMedia();
-        const q = caption.replace(PREFIX, '').trim() || 'Read the contents of this image in detail and extract the important data in English.';
+        const q = caption || 'Read the contents of this image in detail and extract the important data in English.';
         const desc = await readImage(media.data, media.mimetype, q);
         if (!desc) {
           await msg.reply('🤖 Could not read the image — check VISION_MODEL and OPENAI_API_KEY');
@@ -324,35 +321,24 @@ client.on('message', async (msg) => {
       return;
     }
 
-    // Self-chat ("Message yourself"): allowed ONLY with the prefix, so the bot
-    // never replies to its own answers (infinite loop protection).
-    if (msg.fromMe) {
-      if (!PREFIX || !(msg.body || '').trim().startsWith(PREFIX)) return;
-      console.log(`[msg] self-chat command: ${(msg.body || '').slice(0, 60)}`);
-    } else {
-      if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) {
-        console.log('[msg] ignored: group message (IGNORE_GROUPS=true)');
-        return;
-      }
+    // Self-chat messages are ignored so the bot never replies to its own
+    // answers (infinite loop protection).
+    if (msg.fromMe) return;
+    if (IGNORE_GROUPS && msg.from.endsWith('@g.us')) {
+      console.log('[msg] ignored: group message (IGNORE_GROUPS=true)');
+      return;
+    }
 
-      console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
+    console.log(`[msg] from ${msg.from}: ${(msg.body || '').slice(0, 60)}`);
 
-      // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
-      if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
-        console.log('  -> ignored: number not in ALLOWED_NUMBERS');
-        return;
-      }
+    // whitelist check: msg.from looks like "9677xxxxxxx@c.us"
+    if (ALLOWED.length && !ALLOWED.some(n => sender.endsWith(n) || n.endsWith(sender))) {
+      console.log('  -> ignored: number not in ALLOWED_NUMBERS');
+      return;
     }
 
     let text = msg.body.trim();
-    if (PREFIX) {
-      if (!text.startsWith(PREFIX)) {
-        console.log(`  -> ignored: does not start with prefix "${PREFIX}"`);
-        return;
-      }
-      text = text.slice(PREFIX.length).trim();
-      if (!text) return;
-    }
+    if (!text) return;
 
     // built-in commands first
     const cmd = runCommand(text, chatId);

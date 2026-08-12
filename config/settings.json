@@ -39,14 +39,14 @@
     },
     "whatsapp": {
       "enabled": true,
-      "prefix": "!",
-      "allowed_numbers": "00601115604394",
-      "admin_numbers": ""
+      "prefix": "n",
+      "allowed_numbers": "00966500010175",
+      "admin_numbers": "00601115604394"
     },
     "telegram": {
       "enabled": false
     }
   },
   "version": 4,
-  "setup_completed_at": "2026-08-12T23:39:24.150232"
+  "setup_completed_at": "2026-08-13T00:12:40.938727"
 }

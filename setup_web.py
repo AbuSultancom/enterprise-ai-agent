@@ -450,16 +450,13 @@ async def _finalize(sid: str) -> None:
             port = int(step_data.get("web_port", 8000))
             channels["web"] = {"enabled": True, "port": port}
             if step_data.get("whatsapp_enabled") == "on":
-                prefix = step_data.get("whatsapp_prefix", "!")
                 allowed = step_data.get("whatsapp_allowed", "").strip()
                 admins = step_data.get("whatsapp_admin", "").strip()
                 channels["whatsapp"] = {
                     "enabled": True,
-                    "prefix": prefix,
                     "allowed_numbers": allowed,
                     "admin_numbers": admins,
                 }
-                env_vars["BOT_PREFIX"] = prefix
                 if allowed:
                     env_vars["ALLOWED_NUMBERS"] = allowed
                 if admins:
@@ -963,10 +960,6 @@ function updateDefaults(p) {{
   </div>
   <div class="collapsible-body">
     <label class="toggle-item"><input type="checkbox" name="whatsapp_enabled"> Enable WhatsApp</label>
-    <div class="form-group" style="margin-top:12px">
-      <label>Command Prefix</label>
-      <input type="text" name="whatsapp_prefix" value="!" maxlength="3">
-    </div>
     <div class="form-group" style="margin-top:12px">
       <label>Allowed number(s)</label>
       <input type="text" name="whatsapp_allowed" placeholder="9665xxxxxxxx,8613xxxxxxxx (empty = everyone)">

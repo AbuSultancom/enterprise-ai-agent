@@ -29,6 +29,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# When pip/setuptools invoke this file (editable install, wheel build), act as
+# the real package setup and DON'T run the wizard — the wizard's own argparse
+# CLI would reject pip's args like "egg_info" / "editable_wheel" and break
+# `pip install -e .`.
+import re as _re
+
+_PIP_SETUP_CMDS = _re.compile(
+    r"^(egg_info|dist_info|build|build_py|build_ext|sdist|bdist|bdist_wheel|bdist_egg|"
+    r"editable_wheel|editable_wheel_reqs|develop|install|install_lib|"
+    r"--version|--name|--help-commands)$"
+)
+if any(_PIP_SETUP_CMDS.match(a) for a in sys.argv[1:]):
+    from setuptools import setup
+
+    setup()
+    sys.exit(0)
+
 # ── Root directory ────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.resolve()
 CONFIG_DIR = ROOT / "config"
@@ -833,7 +850,6 @@ class CLIWizard:
         # WhatsApp
         wa_current = bool(channels.get("whatsapp", {}).get("enabled", False))
         if ask_yes("Enable WhatsApp integration?", default=wa_current):
-            prefix = ask("Command prefix", default="!", hint="character users type before commands")
             allowed = ask(
                 "Allowed number(s)",
                 default="",
@@ -846,11 +862,9 @@ class CLIWizard:
             )
             channels["whatsapp"] = {
                 "enabled": True,
-                "prefix": prefix or "!",
                 "allowed_numbers": allowed.strip(),
                 "admin_numbers": admins.strip(),
             }
-            self.env["BOT_PREFIX"] = prefix or "!"
             if allowed.strip():
                 self.env["ALLOWED_NUMBERS"] = allowed.strip()
             if admins.strip():
