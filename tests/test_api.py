@@ -42,10 +42,14 @@ class TestToolsEndpoint:
     """Tests for GET /v1/tools."""
 
     @pytest.mark.asyncio
-    async def test_tools_requires_auth(self, test_client):
+    async def test_tools_open_access(self, test_client):
+        # 🔓 Security disabled — tools are accessible without any API key
         async with test_client as client:
             r = await client.get("/v1/tools")
-        assert r.status_code == 403
+        assert r.status_code == 200
+        tools = r.json()
+        assert isinstance(tools, list)
+        assert len(tools) > 0
 
     @pytest.mark.asyncio
     async def test_tools_returns_list(self, test_client, user_headers):
@@ -65,13 +69,13 @@ class TestToolsEndpoint:
 
 
 class TestAuthentication:
-    """Test API key authentication."""
+    """Security is disabled (open access) — keys are accepted but never enforced."""
 
     @pytest.mark.asyncio
-    async def test_invalid_key_returns_403(self, test_client):
+    async def test_invalid_key_still_allowed(self, test_client):
         async with test_client as client:
             r = await client.get("/v1/tools", headers={"X-API-Key": "invalid-key"})
-        assert r.status_code == 403
+        assert r.status_code == 200
 
     @pytest.mark.asyncio
     async def test_admin_can_access_admin_endpoints(self, test_client, admin_headers):
@@ -81,10 +85,11 @@ class TestAuthentication:
         assert r.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_user_cannot_access_admin_endpoints(self, test_client, user_headers):
+    async def test_user_can_access_admin_endpoints(self, test_client, user_headers):
+        # 🔓 No role separation anymore — user key gets admin access too
         async with test_client as client:
             r = await client.get("/v1/admin/audit", headers=user_headers)
-        assert r.status_code == 403
+        assert r.status_code == 200
 
 
 # ─── Security Headers ────────────────────────────────────────────────────────
@@ -125,14 +130,15 @@ class TestKnowledgeEndpoints:
         assert isinstance(r.json(), list)
 
     @pytest.mark.asyncio
-    async def test_add_doc_requires_admin(self, test_client, user_headers):
+    async def test_add_doc_open_access(self, test_client, user_headers):
+        # 🔓 Security disabled — adding docs no longer requires the admin role
         async with test_client as client:
             r = await client.post(
                 "/v1/knowledge",
-                json={"title": "Test", "content": "Test content"},
+                json={"title": "Open Access Doc", "content": "Open access content"},
                 headers=user_headers,
             )
-        assert r.status_code == 403
+        assert r.status_code == 200
 
     @pytest.mark.asyncio
     async def test_add_doc_as_admin(self, test_client, admin_headers):

@@ -1209,7 +1209,6 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
     <div class="tabs" style="overflow-x:auto;display:flex;gap:4px;margin-top:12px">
       <button class="tab active" data-tab="tabIdentity" onclick="switchTab(this,'tabIdentity')">🤖 Identity</button>
       <button class="tab" data-tab="tabModel" onclick="switchTab(this,'tabModel')">🧠 Model & Memory</button>
-      <button class="tab" data-tab="tabSecurity" onclick="switchTab(this,'tabSecurity')">🔒 Security & Roles</button>
       <button class="tab" data-tab="tabERP" onclick="switchTab(this,'tabERP');loadERPHealth()">🏦 ERP Databases</button>
       <button class="tab" data-tab="tabChannels" onclick="switchTab(this,'tabChannels')">📱 Channels & Alerts</button>
       <button class="tab" data-tab="tabKB" onclick="switchTab(this,'tabKB');loadKnowledge()">📚 Knowledge Base</button>
@@ -1260,29 +1259,6 @@ html[dir="ltr"] .msg ul,html[dir="ltr"] .msg ol{padding-right:0;padding-left:20p
             <div style="font-size:0.72rem;color:var(--fg3)">BM25 Keyword Matching + Vector Embeddings + Reranking</div>
           </div>
           <span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700">Enabled</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab 3: Security & Roles -->
-    <div class="tab-content" id="tabSecurity">
-      <p style="font-size:0.82rem;color:var(--fg2);margin-bottom:10px">Manage Role-Based Access Control (RBAC) and API keys:</p>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div>
-          <label style="font-size:0.78rem;color:var(--fg3)">API Key:</label>
-          <input type="text" id="apiKeyInput" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);color:var(--fg);font-size:0.85rem;font-family:monospace;margin-top:4px" placeholder="X-API-Key">
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="header-btn" onclick="saveKey()" style="background:var(--accent);color:#fff;border:none">💾 Save Key</button>
-          <button class="header-btn" onclick="rotateKey()" style="background:var(--bg3)">🔄 Rotate Admin Key</button>
-        </div>
-        <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:var(--radius-xs)">
-          <strong style="font-size:0.82rem;color:var(--fg)">Role Security Policy:</strong>
-          <ul style="font-size:0.75rem;color:var(--fg2);margin-top:6px;padding-left:16px;line-height:1.6">
-            <li><strong>Admin:</strong> Full access to all tools, ERP queries, and database configurations.</li>
-            <li><strong>Manager:</strong> Access to sales, revenue reports, and general tools.</li>
-            <li><strong>Employee:</strong> Access to web search, calculator, knowledge base, and directory.</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -1455,8 +1431,7 @@ const I18N = {
 let lang = localStorage.getItem('dashboardLang') || 'en';
 let currentConv = null;
 let loading = false;
-// Security: API key stored in sessionStorage (cleared on tab close, not persisted cross-session)
-let apiKey = sessionStorage.getItem('apiKey') || '';
+// 🔓 security disabled — no API key needed
 let allConvs = [];
 let pinnedConvs = JSON.parse(localStorage.getItem('pinnedConvs')||'[]');
 let toolCount = 33;
@@ -1524,7 +1499,6 @@ function toggleLang(){setLang(lang==='ar'?'en':'ar')}
 // === API helper ===
 async function api(path,opts={}){
   const headers={'Content-Type':'application/json'};
-  if(apiKey) headers['X-API-Key']=apiKey;
   if(opts.formData) delete headers['Content-Type'];
   const res=await fetch(path,{...opts,headers});
   if(res.status===403) throw new Error('auth');
@@ -1941,7 +1915,7 @@ async function send(){
     if(currentConv) body.session_id=currentConv;
     const res=await fetch('/v1/chat/stream',{
       method:'POST',
-      headers:{'Content-Type':'application/json',...(apiKey?{'X-API-Key':apiKey}:{})},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)
     });
     if(!res.ok){throw new Error(res.status)}
@@ -1990,8 +1964,7 @@ async function send(){
       if(data.session_id){currentConv=data.session_id;loadConvs()}
     }catch(e2){
       document.querySelector('.msg.thinking')?.remove();
-      if(e2.message==='auth') addMsg('agent',t('error_auth'),null);
-      else addMsg('agent',t('error_network')+': '+e2.message,null);
+      addMsg('agent',t('error_network')+': '+e2.message,null);
     }
   }
   loading=false;
@@ -2276,20 +2249,6 @@ async function sendTestEmailAlert() {
   }
 }
 
-async function rotateKey() {
-  try {
-    const res = await api('/v1/admin/rotate-key', { method: 'POST' });
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('apiKeyInput').value = data.api_key;
-      saveKey();
-      toast(lang === 'ar' ? '🔑 تم توليد مفتاح جديد بنجاح' : '🔑 New Admin key generated');
-    }
-  } catch(e) {
-    toast('❌ Failed to rotate key');
-  }
-}
-
 async function showHealth(){
   document.getElementById('healthModal').classList.add('open');
   const el=document.getElementById('healthContent');
@@ -2383,10 +2342,6 @@ function downloadChat() {
   toast(lang === 'ar' ? 'جاري بداية التنزيل...' : 'Download started...');
 }
 
-function saveKey(){
-  const k=document.getElementById('apiKeyInput').value.trim();
-  if(k){apiKey=k;sessionStorage.setItem('apiKey',k);toast(t('key_saved'))}
-}
 // Close modals on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open')})});
 
@@ -2485,7 +2440,6 @@ applyTheme(currentTheme);
 setLang(lang);
 checkHealth();
 loadConvs();
-if(apiKey) document.getElementById('apiKeyInput').value=apiKey;
 
 // Refresh health & convs periodically
 setInterval(checkHealth,30000);

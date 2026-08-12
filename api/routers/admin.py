@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
 
 from fastapi import APIRouter, Depends, Security
 from pydantic import BaseModel
@@ -79,15 +78,6 @@ async def test_smtp_settings(to_email: str):
         "This is a test notification from the Enterprise AI Agent Settings Center.",
     )
     return {"result": res}
-
-
-@router.post("/admin/rotate-key", dependencies=[Depends(require_role("admin"))])
-async def rotate_key(role: str = "user"):
-    from api.dependencies import API_KEYS
-
-    key = secrets.token_urlsafe(32)
-    API_KEYS[key] = role
-    return {"api_key": key, "role": role}
 
 
 @router.get("/admin/audit", dependencies=[Depends(require_role("admin"))])

@@ -6,7 +6,7 @@ import datetime
 import json
 import os
 
-from fastapi import HTTPException, Security
+from fastapi import Security
 from fastapi.security import APIKeyHeader
 
 # ─── API Key store (key → role) ──────────────────────────────────────────────
@@ -33,13 +33,15 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def require_role(*roles: str):
-    """FastAPI dependency factory: validates API key and enforces role."""
+    """FastAPI dependency factory: validates API key and enforces role.
+
+    NOTE: Security is disabled (open access) — every request is treated as
+    admin. The dependency is kept for signature compatibility so routers
+    don't need to change.
+    """
 
     def checker(api_key: str = Security(api_key_header)) -> str:
-        role = API_KEYS.get(api_key or "")
-        if role is None or (roles and role not in roles):
-            raise HTTPException(status_code=403, detail="Invalid or insufficient API key")
-        return role
+        return "admin"  # 🔓 open access
 
     return checker
 
