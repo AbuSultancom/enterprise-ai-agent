@@ -7,10 +7,10 @@
 ║  Or manually: uvicorn setup_web:app --host 0.0.0.0 --port 8088      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
+
 from __future__ import annotations
 
 import json
-import os
 import re
 import secrets
 import shutil
@@ -23,14 +23,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 # ── Paths ─────────────────────────────────────────────────────────────────
-BASE_DIR    = Path(__file__).parent.resolve()
-CONFIG_DIR  = BASE_DIR / "config"
+BASE_DIR = Path(__file__).parent.resolve()
+CONFIG_DIR = BASE_DIR / "config"
 CONFIG_DIR.mkdir(exist_ok=True)
-ENV_FILE    = BASE_DIR / ".env"
+ENV_FILE = BASE_DIR / ".env"
 SETTINGS_FILE = BASE_DIR / "settings.json"
-SETTINGS_CFG  = CONFIG_DIR / "settings.json"
-SCHEMA_FILE   = CONFIG_DIR / "accounting_schema.json"
-BACKUP_DIR    = BASE_DIR / "backups"
+SETTINGS_CFG = CONFIG_DIR / "settings.json"
+SCHEMA_FILE = CONFIG_DIR / "accounting_schema.json"
+BACKUP_DIR = BASE_DIR / "backups"
 
 # ── App ───────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -44,13 +44,32 @@ app = FastAPI(
 sessions: dict[str, dict[str, Any]] = {}
 
 STEPS = {
-    "en": ["Language", "LLM", "Identity", "Security", "Channels", "Database", "Permissions", "Finalize"],
-    "ar": ["اللغة", "النموذج", "الهوية", "الأمان", "القنوات", "قاعدة البيانات", "الصلاحيات", "الإنهاء"],
+    "en": [
+        "Language",
+        "LLM",
+        "Identity",
+        "Security",
+        "Channels",
+        "Database",
+        "Permissions",
+        "Finalize",
+    ],
+    "ar": [
+        "اللغة",
+        "النموذج",
+        "الهوية",
+        "الأمان",
+        "القنوات",
+        "قاعدة البيانات",
+        "الصلاحيات",
+        "الإنهاء",
+    ],
 }
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Utility                                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
+
 
 def _session(request: Request) -> tuple[str, dict]:
     sid = request.cookies.get("setup_sid") or secrets.token_hex(20)
@@ -141,13 +160,17 @@ def _stop_whatsapp_bridge() -> None:
     try:
         out = subprocess.run(
             [
-                "powershell.exe", "-NoProfile", "-Command",
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
                 "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | "
                 "Where-Object { $_.CommandLine -match 'index\\.js' -and "
                 "$_.CommandLine -notmatch 'openclaw|node_modules|\\\\dist' } | "
                 "ForEach-Object { $_.ProcessId }",
             ],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True,
+            text=True,
+            timeout=20,
         )
         for pid in (p for p in out.stdout.split() if p.isdigit()):
             subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=15)
@@ -158,7 +181,7 @@ def _stop_whatsapp_bridge() -> None:
 
 def _backup() -> str:
     BACKUP_DIR.mkdir(exist_ok=True)
-    ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = BACKUP_DIR / f"web_backup_{ts}"
     dst.mkdir(exist_ok=True)
     for f in (ENV_FILE, SETTINGS_FILE, SETTINGS_CFG, SCHEMA_FILE):
@@ -169,22 +192,23 @@ def _backup() -> str:
 
 # ── Connection string builder ─────────────────────────────────────────────
 
+
 def _build_url(form: dict) -> str:
-    db_type  = form.get("db_type", "mssql")
+    db_type = form.get("db_type", "mssql")
     if db_type == "sqlite":
         return f"sqlite:///{form.get('sqlite_path', 'data/accounting.db')}"
 
-    host    = form.get("host", "localhost")
-    port    = form.get("port", "1433")
+    host = form.get("host", "localhost")
+    port = form.get("port", "1433")
     db_name = form.get("db_name", "")
-    user    = form.get("username", "")
-    pw      = urllib.parse.quote_plus(form.get("password", ""))
+    user = form.get("username", "")
+    pw = urllib.parse.quote_plus(form.get("password", ""))
     user_at = f"{user}:{pw}@" if user else ""
 
     drv_map = {
-        "oracle":     "oracle+oracledb",
-        "mssql":      "mssql+pyodbc",
-        "mysql":      "mysql+pymysql",
+        "oracle": "oracle+oracledb",
+        "mssql": "mssql+pyodbc",
+        "mysql": "mysql+pymysql",
         "postgresql": "postgresql+psycopg2",
     }
     drv = drv_map.get(db_type, "oracle+oracledb")
@@ -202,6 +226,7 @@ def _build_url(form: dict) -> str:
 # ║  API Endpoints                                                           ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return RedirectResponse(url="/setup")
@@ -217,23 +242,23 @@ async def setup_home(request: Request, step: int = 0, lang: str = "en"):
     # Pre-fill session with existing config on first visit
     if not sess:
         sessions[sid] = {
-            "env":      _load_existing_env(),
+            "env": _load_existing_env(),
             "settings": _load_existing_settings(),
-            "schema":   _load_existing_schema(),
+            "schema": _load_existing_schema(),
         }
 
     step_names = STEPS[lang]
     context = {
-        "lang":         lang,
-        "step":         step,
-        "total_steps":  8,
-        "step_names":   step_names,
-        "step_title":   step_names[step] if step < len(step_names) else "Complete",
-        "session":      json.dumps(sessions.get(sid, {}), ensure_ascii=False, indent=2),
-        "admin_key":    secrets.token_urlsafe(40),
-        "user_key":     secrets.token_urlsafe(40),
-        "jwt_secret":   secrets.token_urlsafe(40),
-        "enc_key":      secrets.token_urlsafe(40),
+        "lang": lang,
+        "step": step,
+        "total_steps": 8,
+        "step_names": step_names,
+        "step_title": step_names[step] if step < len(step_names) else "Complete",
+        "session": json.dumps(sessions.get(sid, {}), ensure_ascii=False, indent=2),
+        "admin_key": secrets.token_urlsafe(40),
+        "user_key": secrets.token_urlsafe(40),
+        "jwt_secret": secrets.token_urlsafe(40),
+        "enc_key": secrets.token_urlsafe(40),
         "existing_env": sessions.get(sid, {}).get("env", {}),
     }
     html = _render_setup_page(context)
@@ -257,22 +282,31 @@ async def handle_step(request: Request, step: int = 0, lang: str = "en"):
 
 # ── API: test LLM connection ──────────────────────────────────────────────
 
+
 @app.post("/api/test/llm")
 async def test_llm(request: Request):
     form = dict(await request.form())
-    url  = form.get("url", "").rstrip("/")
+    url = form.get("url", "").rstrip("/")
     try:
         import urllib.request as ur
+
         req = ur.Request(f"{url}/api/tags", headers={"User-Agent": "EnterpriseAI-Setup/3.0"})
         with ur.urlopen(req, timeout=6) as r:
             body = json.loads(r.read())
             models = [m["name"] for m in body.get("models", [])[:5]]
-            return JSONResponse({"ok": True, "message": f"Connected · {len(body.get('models', []))} models", "models": models})
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "message": f"Connected · {len(body.get('models', []))} models",
+                    "models": models,
+                }
+            )
     except Exception as e:
         return JSONResponse({"ok": False, "message": str(e)})
 
 
 # ── API: test database connection ─────────────────────────────────────────
+
 
 @app.post("/api/test/db")
 async def test_db(request: Request):
@@ -285,6 +319,7 @@ async def test_db(request: Request):
 
     try:
         from sqlalchemy import create_engine, text  # type: ignore
+
         # Oracle's driver does not accept the pyodbc-style "timeout" connect arg
         connect_args = {} if full_url.startswith("oracle") else {"timeout": 8}
         engine = create_engine(full_url, connect_args=connect_args, pool_pre_ping=True)
@@ -293,12 +328,15 @@ async def test_db(request: Request):
         engine.dispose()
         return JSONResponse({"ok": True, "message": "Connection successful", "url": full_url})
     except ImportError:
-        return JSONResponse({"ok": False, "message": "SQLAlchemy not installed. Run: pip install sqlalchemy"})
+        return JSONResponse(
+            {"ok": False, "message": "SQLAlchemy not installed. Run: pip install sqlalchemy"}
+        )
     except Exception as e:
         return JSONResponse({"ok": False, "message": str(e), "url": full_url})
 
 
 # ── API: auto-discover database schema ───────────────────────────────────
+
 
 @app.post("/api/discover/db")
 async def discover_db(request: Request):
@@ -306,7 +344,9 @@ async def discover_db(request: Request):
     full_url = form.get("db_url", "").strip() or _build_url(form)
 
     try:
-        from sqlalchemy import create_engine, inspect as sa_inspect  # type: ignore
+        from sqlalchemy import create_engine  # type: ignore
+        from sqlalchemy import inspect as sa_inspect
+
         engine = create_engine(full_url)
         inspector = sa_inspect(engine)
         tables_raw = inspector.get_table_names()
@@ -315,7 +355,7 @@ async def discover_db(request: Request):
             try:
                 cols = inspector.get_columns(tbl)
                 result[tbl] = {
-                    "table":   tbl,
+                    "table": tbl,
                     "columns": {c["name"].lower(): c["name"] for c in cols},
                 }
             except Exception:
@@ -330,21 +370,23 @@ async def discover_db(request: Request):
 
 # ── API: build connection URL preview ────────────────────────────────────
 
+
 @app.post("/api/build-url")
 async def build_url_endpoint(request: Request):
     form = dict(await request.form())
-    url  = _build_url(form)
+    url = _build_url(form)
     return JSONResponse({"url": url})
 
 
 # ── Finalize ──────────────────────────────────────────────────────────────
 
+
 async def _finalize(sid: str) -> None:
     data = sessions.get(sid, {})
 
-    env_vars:  dict[str, str] = {}
-    settings:  dict[str, Any] = {"version": 4, "setup_completed_at": datetime.now().isoformat()}
-    schema:    dict[str, Any] = {"version": 2, "databases": {}}
+    env_vars: dict[str, str] = {}
+    settings: dict[str, Any] = {"version": 4, "setup_completed_at": datetime.now().isoformat()}
+    schema: dict[str, Any] = {"version": 2, "databases": {}}
 
     # ── Merge all step data ──────────────────────────────────────────────
     for step_key in sorted(data.keys()):
@@ -358,39 +400,49 @@ async def _finalize(sid: str) -> None:
 
         # Step 1: LLM
         elif step_key == "step_1":
-            provider  = step_data.get("provider", "ollama")
-            model     = step_data.get("model", "qwen2.5:7b")
-            base_url  = step_data.get("base_url", "http://localhost:11434")
-            api_key   = step_data.get("api_key", "")
+            provider = step_data.get("provider", "ollama")
+            model = step_data.get("model", "qwen2.5:7b")
+            base_url = step_data.get("base_url", "http://localhost:11434")
+            api_key = step_data.get("api_key", "")
             prefix_map = {
-                "ollama": "ollama", "openai": "openai", "anthropic": "openai",
-                "google": "openai", "deepseek": "openai", "custom": "openai",
+                "ollama": "ollama",
+                "openai": "openai",
+                "anthropic": "openai",
+                "google": "openai",
+                "deepseek": "openai",
+                "custom": "openai",
             }
-            env_vars["DEFAULT_MODEL"]   = f"{prefix_map.get(provider, 'ollama')}:{model}"
+            env_vars["DEFAULT_MODEL"] = f"{prefix_map.get(provider, 'ollama')}:{model}"
             env_vars["OPENAI_BASE_URL"] = base_url
-            env_vars["OLLAMA_BASE_URL"] = base_url if provider == "ollama" else "http://localhost:11434"
+            env_vars["OLLAMA_BASE_URL"] = (
+                base_url if provider == "ollama" else "http://localhost:11434"
+            )
             if api_key:
                 env_vars["OPENAI_API_KEY"] = api_key
             settings["llm_provider"] = provider
-            settings["llm_model"]    = model
+            settings["llm_model"] = model
 
         # Step 2: Identity
         elif step_key == "step_2":
-            settings.setdefault("agent", {}).update({
-                "name":           step_data.get("agent_name", "Enterprise AI Agent"),
-                "personality":    step_data.get("personality", "a professional enterprise assistant"),
-                "reply_language": step_data.get("reply_language", "auto"),
-            })
+            settings.setdefault("agent", {}).update(
+                {
+                    "name": step_data.get("agent_name", "Enterprise AI Agent"),
+                    "personality": step_data.get(
+                        "personality", "a professional enterprise assistant"
+                    ),
+                    "reply_language": step_data.get("reply_language", "auto"),
+                }
+            )
 
         # Step 3: Security
         elif step_key == "step_3":
             admin_key = step_data.get("admin_key", secrets.token_urlsafe(40))
-            user_key  = step_data.get("user_key",  secrets.token_urlsafe(40))
-            env_vars["ADMIN_KEY"]      = admin_key
-            env_vars["USER_KEY"]       = user_key
-            env_vars["API_KEYS"]       = f"admin:{admin_key},user:{user_key}"
-            env_vars["JWT_SECRET"]     = step_data.get("jwt_secret",  secrets.token_urlsafe(40))
-            env_vars["ENCRYPTION_KEY"] = step_data.get("enc_key",     secrets.token_urlsafe(40))
+            user_key = step_data.get("user_key", secrets.token_urlsafe(40))
+            env_vars["ADMIN_KEY"] = admin_key
+            env_vars["USER_KEY"] = user_key
+            env_vars["API_KEYS"] = f"admin:{admin_key},user:{user_key}"
+            env_vars["JWT_SECRET"] = step_data.get("jwt_secret", secrets.token_urlsafe(40))
+            env_vars["ENCRYPTION_KEY"] = step_data.get("enc_key", secrets.token_urlsafe(40))
 
         # Step 4: Channels
         elif step_key == "step_4":
@@ -434,9 +486,9 @@ async def _finalize(sid: str) -> None:
         # Step 5: Database
         elif step_key == "step_5":
             if step_data.get("accounting_enabled") == "on":
-                db_key     = re.sub(r"[^a-z0-9_]", "_", step_data.get("db_key", "onyxdb").lower())
-                db_name    = step_data.get("db_display_name", db_key)
-                db_url     = step_data.get("db_url", "").strip() or _build_url(step_data)
+                db_key = re.sub(r"[^a-z0-9_]", "_", step_data.get("db_key", "onyxdb").lower())
+                db_name = step_data.get("db_display_name", db_key)
+                db_url = step_data.get("db_url", "").strip() or _build_url(step_data)
                 tables_raw = step_data.get("discovered_tables", "")
 
                 try:
@@ -445,25 +497,31 @@ async def _finalize(sid: str) -> None:
                     tables = {}
 
                 schema["databases"][db_key] = {
-                    "name":          db_name,
-                    "db_url":        db_url,
-                    "enabled":       True,
-                    "tables":        tables,
+                    "name": db_name,
+                    "db_url": db_url,
+                    "enabled": True,
+                    "tables": tables,
                     "query_aliases": {},
                 }
                 env_vars["ACCOUNTING_DB_URL"] = db_url
 
                 allowed_queries = [
-                    q for q in [
-                        "sales_summary", "revenue_by_month", "top_customers",
-                        "expenses_summary", "invoice_lookup", "cash_balance",
-                        "vendor_balances", "sales_by_item",
+                    q
+                    for q in [
+                        "sales_summary",
+                        "revenue_by_month",
+                        "top_customers",
+                        "expenses_summary",
+                        "invoice_lookup",
+                        "cash_balance",
+                        "vendor_balances",
+                        "sales_by_item",
                     ]
                     if step_data.get(f"allow_{q}") == "on"
                 ]
                 settings["accounting"] = {
-                    "enabled":         True,
-                    "read_only":       True,
+                    "enabled": True,
+                    "read_only": True,
                     "allowed_queries": allowed_queries,
                 }
             else:
@@ -472,9 +530,17 @@ async def _finalize(sid: str) -> None:
         # Step 6: Permissions
         elif step_key == "step_6":
             perm_keys = [
-                "web_search", "calculator", "get_current_time", "read_file",
-                "knowledge_rag", "accounting_tools", "generate_report",
-                "list_reports", "search_conversations", "send_email", "send_webhook",
+                "web_search",
+                "calculator",
+                "get_current_time",
+                "read_file",
+                "knowledge_rag",
+                "accounting_tools",
+                "generate_report",
+                "list_reports",
+                "search_conversations",
+                "send_email",
+                "send_webhook",
             ]
             settings["permissions"] = {k: (step_data.get(k) == "on") for k in perm_keys}
 
@@ -490,15 +556,18 @@ async def _finalize(sid: str) -> None:
 # ║  HTML Renderer (single-page, no Jinja2 dependency)                       ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+
 def _render_setup_page(ctx: dict) -> str:
-    step       = ctx["step"]
-    lang       = ctx["lang"]
-    total      = ctx["total_steps"]
+    step = ctx["step"]
+    lang = ctx["lang"]
+    total = ctx["total_steps"]
     step_names = ctx["step_names"]
-    pct        = int(100 * step / total)
-    rtl        = "rtl" if lang == "ar" else "ltr"
-    font_url   = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-    is_done    = step >= total
+    pct = int(100 * step / total)
+    rtl = "rtl" if lang == "ar" else "ltr"
+    font_url = (
+        "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    )
+    is_done = step >= total
 
     # Step content
     content = _step_content(step, ctx)
@@ -507,13 +576,13 @@ def _render_setup_page(ctx: dict) -> str:
     sidebar_items = ""
     for i, name in enumerate(step_names):
         if i < step:
-            cls  = "done"
+            cls = "done"
             icon = "✓"
         elif i == step:
-            cls  = "active"
+            cls = "active"
             icon = str(i + 1)
         else:
-            cls  = ""
+            cls = ""
             icon = str(i + 1)
         sidebar_items += f'<div class="step-item {cls}"><div class="step-num">{icon}</div><div class="step-label">{name}</div></div>\n'
 
@@ -753,10 +822,10 @@ async function discoverSchema() {{
 def _step_content(step: int, ctx: dict) -> str:
     lang = ctx["lang"]
     admin_key = ctx["admin_key"]
-    user_key  = ctx["user_key"]
+    user_key = ctx["user_key"]
     jwt_secret = ctx["jwt_secret"]
-    enc_key   = ctx["enc_key"]
-    ex_env    = ctx.get("existing_env", {})
+    enc_key = ctx["enc_key"]
+    ex_env = ctx.get("existing_env", {})
 
     if step == 0:
         return f"""
@@ -1090,19 +1159,27 @@ document.getElementById('acct-toggle').addEventListener('change', function() {{
 
     if step == 6:
         perms = [
-            ("web_search",           "🔍 Web Search"),
-            ("calculator",           "🧮 Calculator"),
-            ("get_current_time",     "🕐 Get Current Time"),
-            ("read_file",            "📁 File System Read"),
-            ("knowledge_rag",        "📚 Knowledge Base (RAG)"),
-            ("accounting_tools",     "💼 Accounting / ERP Queries"),
-            ("generate_report",      "📊 Report Generation"),
-            ("list_reports",         "📋 List Reports"),
+            ("web_search", "🔍 Web Search"),
+            ("calculator", "🧮 Calculator"),
+            ("get_current_time", "🕐 Get Current Time"),
+            ("read_file", "📁 File System Read"),
+            ("knowledge_rag", "📚 Knowledge Base (RAG)"),
+            ("accounting_tools", "💼 Accounting / ERP Queries"),
+            ("generate_report", "📊 Report Generation"),
+            ("list_reports", "📋 List Reports"),
             ("search_conversations", "💬 Search Conversation History"),
-            ("send_email",           "📧 Send Email Notifications"),
-            ("send_webhook",         "🔔 Send Webhook Alerts"),
+            ("send_email", "📧 Send Email Notifications"),
+            ("send_webhook", "🔔 Send Webhook Alerts"),
         ]
-        default_on = {"web_search", "calculator", "get_current_time", "knowledge_rag", "generate_report", "list_reports", "search_conversations"}
+        default_on = {
+            "web_search",
+            "calculator",
+            "get_current_time",
+            "knowledge_rag",
+            "generate_report",
+            "list_reports",
+            "search_conversations",
+        }
         items = "".join(
             f'<label class="toggle-item"><input type="checkbox" name="{k}" {"checked" if k in default_on else ""}> {label}</label>'
             for k, label in perms
@@ -1131,7 +1208,7 @@ document.getElementById('acct-toggle').addEventListener('change', function() {{
 </form>"""
 
     # Done (step >= 8)
-    return f"""
+    return """
 <div class="done-icon">🎉</div>
 <div class="done-title">Setup Complete!</div>
 <div class="section-sub" style="text-align:center;margin-bottom:24px">

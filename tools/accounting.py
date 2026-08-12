@@ -6,6 +6,7 @@ parameter to specify which configured DB to query.
 
 Also includes diagnostic tools for setup and schema discovery.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -13,12 +14,9 @@ import json
 import os
 
 from connectors.accounting import (
-    AccountingConnector,
-    SchemaConfig,
-    discover_schema,
     SCHEMA_CONFIG_PATH,
-    _save_multi_db_config,
     connector,
+    discover_schema,
 )
 
 from .registry import registry
@@ -37,19 +35,21 @@ def _default_range(start: str | None, end: str | None) -> tuple[str, str]:
 
 def _to_json(rows: list[dict]) -> str:
     def default(o):
-        if isinstance(o, (datetime.date, datetime.datetime)):
+        if isinstance(o, datetime.date | datetime.datetime):
             return o.isoformat()
         if hasattr(o, "__float__"):  # Decimal
             return float(o)
         return str(o)
+
     return json.dumps(rows, ensure_ascii=False, default=default, indent=2)
 
 
 # ─── Database management tools ─────────────────────────────────
 
+
 @registry.register(
     description="List all configured accounting databases. Shows key, name, connection status, "
-                "table count, and query count for each database.",
+    "table count, and query count for each database.",
     parameters={},
 )
 def list_databases() -> str:
@@ -73,12 +73,18 @@ def list_databases() -> str:
 
 @registry.register(
     description="Add a new accounting database. Provide a unique key, display name, "
-                "and the connection URL. Optionally auto-discover schema.",
+    "and the connection URL. Optionally auto-discover schema.",
     parameters={
         "db_key": {"type": "str", "description": "Unique database key (e.g., 'inventory', 'hr')"},
         "name": {"type": "str", "description": "Display name (e.g., 'Inventory DB')"},
-        "db_url": {"type": "str", "description": "Full SQLAlchemy connection URL (e.g., mssql+pyodbc://...)"},
-        "discover": {"type": "str", "description": "Auto-discover schema? 'yes' or 'no' (default: 'yes')"},
+        "db_url": {
+            "type": "str",
+            "description": "Full SQLAlchemy connection URL (e.g., mssql+pyodbc://...)",
+        },
+        "discover": {
+            "type": "str",
+            "description": "Auto-discover schema? 'yes' or 'no' (default: 'yes')",
+        },
     },
 )
 def add_database(db_key: str, name: str, db_url: str, discover: str = "yes") -> str:
@@ -107,10 +113,11 @@ def add_database(db_key: str, name: str, db_url: str, discover: str = "yes") -> 
 
 # ─── Diagnostic tools ─────────────────────────────────────────────
 
+
 @registry.register(
     description="Test the accounting database connection(s) and show status. "
-                "If no database is specified, shows all configured databases. "
-                "Use this first to check if the ERP is reachable.",
+    "If no database is specified, shows all configured databases. "
+    "Use this first to check if the ERP is reachable.",
     parameters={
         "database": {"type": "str", "description": "Database key (optional; shows all if empty)"},
     },
@@ -162,10 +169,13 @@ def diagnose_connection(database: str = "") -> str:
 
 @registry.register(
     description="Automatically discover the accounting database schema. "
-                "Scans INFORMATION_SCHEMA to find tables and columns, "
-                "then saves the mapping to config/accounting_schema.json.",
+    "Scans INFORMATION_SCHEMA to find tables and columns, "
+    "then saves the mapping to config/accounting_schema.json.",
     parameters={
-        "database": {"type": "str", "description": "Database key to discover (default: first configured DB)"},
+        "database": {
+            "type": "str",
+            "description": "Database key to discover (default: first configured DB)",
+        },
     },
 )
 def discover_schema_tool(database: str = "") -> str:
@@ -200,7 +210,7 @@ def discover_schema_tool(database: str = "") -> str:
         connector.add_database(database or "onyx", discovered.name, db_url, discovered)
         info = discovered.get_schema_info()
         lines = [
-            f"✅ Schema discovery complete!",
+            "✅ Schema discovery complete!",
             f"   Name: {info['name']}",
             f"   Saved to: {SCHEMA_CONFIG_PATH}",
             "",
@@ -257,13 +267,17 @@ def show_schema_config(database: str = "") -> str:
 
 # ─── Accounting query tools ───────────────────────────────────────
 
+
 @registry.register(
     description="Get company sales summary (invoice count, total sales, tax, discounts) for a date range. "
-                "Dates are YYYY-MM-DD; leave empty for the current month.",
+    "Dates are YYYY-MM-DD; leave empty for the current month.",
     parameters={
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_sales_summary(start_date: str = "", end_date: str = "", database: str = "") -> str:
@@ -281,7 +295,10 @@ def get_sales_summary(start_date: str = "", end_date: str = "", database: str = 
     parameters={
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_revenue_by_month(start_date: str = "", end_date: str = "", database: str = "") -> str:
@@ -300,14 +317,21 @@ def get_revenue_by_month(start_date: str = "", end_date: str = "", database: str
         "limit": {"type": "int", "description": "Number of customers (default 5)"},
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
-def get_top_customers(limit: int = 5, start_date: str = "", end_date: str = "", database: str = "") -> str:
+def get_top_customers(
+    limit: int = 5, start_date: str = "", end_date: str = "", database: str = ""
+) -> str:
     start, end = _default_range(start_date or None, end_date or None)
     db = database or None
     try:
-        rows = connector.run("top_customers", db_name=db, limit=int(limit or 5), start=start, end=end)
+        rows = connector.run(
+            "top_customers", db_name=db, limit=int(limit or 5), start=start, end=end
+        )
         return _to_json(rows)
     except Exception as e:
         return f"❌ Top customers query failed: {e}"
@@ -318,7 +342,10 @@ def get_top_customers(limit: int = 5, start_date: str = "", end_date: str = "", 
     parameters={
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_expenses_summary(start_date: str = "", end_date: str = "", database: str = "") -> str:
@@ -335,7 +362,10 @@ def get_expenses_summary(start_date: str = "", end_date: str = "", database: str
     description="Look up a specific sales invoice by its invoice number.",
     parameters={
         "invoice_no": {"type": "str", "description": "Invoice number"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_invoice(invoice_no: str, database: str = "") -> str:
@@ -350,7 +380,10 @@ def get_invoice(invoice_no: str, database: str = "") -> str:
 @registry.register(
     description="Get current cash and bank account balances.",
     parameters={
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_cash_balance(database: str = "") -> str:
@@ -367,7 +400,10 @@ def get_cash_balance(database: str = "") -> str:
     parameters={
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_vendor_balances(start_date: str = "", end_date: str = "", database: str = "") -> str:
@@ -385,7 +421,10 @@ def get_vendor_balances(start_date: str = "", end_date: str = "", database: str 
     parameters={
         "start_date": {"type": "str", "description": "Start date YYYY-MM-DD (optional)"},
         "end_date": {"type": "str", "description": "End date YYYY-MM-DD (optional)"},
-        "database": {"type": "str", "description": "Database key (optional; uses default if empty)"},
+        "database": {
+            "type": "str",
+            "description": "Database key (optional; uses default if empty)",
+        },
     },
 )
 def get_sales_by_item(start_date: str = "", end_date: str = "", database: str = "") -> str:
@@ -402,22 +441,65 @@ def get_sales_by_item(start_date: str = "", end_date: str = "", database: str = 
 @registry.register(
     description="Compare sales, revenue, or performance between different company branches.",
     parameters={
-        "metric": {"type": "str", "description": "What to compare: sales, revenue, profit, employees, invoices"},
-        "period": {"type": "str", "description": "Time period: today, this_month, last_month, this_year"},
-        "branches": {"type": "str", "description": "Branch names separated by commas (e.g. Riyadh,Jeddah,Dammam) — empty for all branches"},
-    }
+        "metric": {
+            "type": "str",
+            "description": "What to compare: sales, revenue, profit, employees, invoices",
+        },
+        "period": {
+            "type": "str",
+            "description": "Time period: today, this_month, last_month, this_year",
+        },
+        "branches": {
+            "type": "str",
+            "description": "Branch names separated by commas (e.g. Riyadh,Jeddah,Dammam) — empty for all branches",
+        },
+    },
 )
-async def compare_branches(metric: str = "sales", period: str = "this_month", branches: str = "") -> str:
+async def compare_branches(
+    metric: str = "sales", period: str = "this_month", branches: str = ""
+) -> str:
     """Compare business metrics across branches."""
-    import json, os
-    branches_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "branches.json")
+    import json
+    import os
+
+    branches_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "branches.json"
+    )
     try:
         if not os.path.exists(branches_file):
             default = [
-                {"name": "الرياض", "name_en": "Riyadh", "sales": 125000, "revenue": 98000, "employees": 12, "invoices": 45},
-                {"name": "جدة", "name_en": "Jeddah", "sales": 98000, "revenue": 72000, "employees": 8, "invoices": 32},
-                {"name": "الدمام", "name_en": "Dammam", "sales": 67000, "revenue": 51000, "employees": 6, "invoices": 21},
-                {"name": "المدينة", "name_en": "Madinah", "sales": 45000, "revenue": 33000, "employees": 4, "invoices": 15},
+                {
+                    "name": "الرياض",
+                    "name_en": "Riyadh",
+                    "sales": 125000,
+                    "revenue": 98000,
+                    "employees": 12,
+                    "invoices": 45,
+                },
+                {
+                    "name": "جدة",
+                    "name_en": "Jeddah",
+                    "sales": 98000,
+                    "revenue": 72000,
+                    "employees": 8,
+                    "invoices": 32,
+                },
+                {
+                    "name": "الدمام",
+                    "name_en": "Dammam",
+                    "sales": 67000,
+                    "revenue": 51000,
+                    "employees": 6,
+                    "invoices": 21,
+                },
+                {
+                    "name": "المدينة",
+                    "name_en": "Madinah",
+                    "sales": 45000,
+                    "revenue": 33000,
+                    "employees": 4,
+                    "invoices": 15,
+                },
             ]
             os.makedirs(os.path.dirname(branches_file), exist_ok=True)
             with open(branches_file, "w", encoding="utf-8") as f:
@@ -426,8 +508,14 @@ async def compare_branches(metric: str = "sales", period: str = "this_month", br
         with open(branches_file, encoding="utf-8") as f:
             data = json.load(f)
 
-        requested = [b.strip().lower() for b in branches.split(",") if b.strip()] if branches else [d["name_en"].lower() for d in data]
-        filtered = [d for d in data if d["name_en"].lower() in requested or d["name"].lower() in requested]
+        requested = (
+            [b.strip().lower() for b in branches.split(",") if b.strip()]
+            if branches
+            else [d["name_en"].lower() for d in data]
+        )
+        filtered = [
+            d for d in data if d["name_en"].lower() in requested or d["name"].lower() in requested
+        ]
 
         if not filtered:
             return f"No branches found matching: {branches}"
@@ -450,4 +538,3 @@ async def compare_branches(metric: str = "sales", period: str = "this_month", br
         return "\n".join(lines)
     except Exception as e:
         return f"Error comparing branches: {e}"
-

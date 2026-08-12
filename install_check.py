@@ -5,6 +5,7 @@ Run: python install_check.py
 Checks all system requirements and prints a full health report.
 Exit code 0 = all good, 1 = warnings, 2 = critical errors.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -16,36 +17,48 @@ import sys
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-GREEN  = "\033[92m"
+GREEN = "\033[92m"
 YELLOW = "\033[93m"
-RED    = "\033[91m"
-CYAN   = "\033[96m"
-BOLD   = "\033[1m"
-RESET  = "\033[0m"
+RED = "\033[91m"
+CYAN = "\033[96m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
-TICK   = "✓"
-WARN   = "⚠"
-CROSS  = "✗"
-INFO   = "→"
+TICK = "✓"
+WARN = "⚠"
+CROSS = "✗"
+INFO = "→"
 
-_errors   = 0
+_errors = 0
 _warnings = 0
 
 
-def ok(msg: str)     -> None: print(f"  {GREEN}{TICK}{RESET}  {msg}")
-def warn(msg: str)   -> None:
+def ok(msg: str) -> None:
+    print(f"  {GREEN}{TICK}{RESET}  {msg}")
+
+
+def warn(msg: str) -> None:
     global _warnings
     _warnings += 1
     print(f"  {YELLOW}{WARN}{RESET}  {msg}")
-def fail(msg: str)   -> None:
+
+
+def fail(msg: str) -> None:
     global _errors
     _errors += 1
     print(f"  {RED}{CROSS}{RESET}  {msg}")
-def info(msg: str)   -> None: print(f"  {CYAN}{INFO}{RESET}  {msg}")
-def header(msg: str) -> None: print(f"\n{BOLD}{CYAN}{msg}{RESET}")
+
+
+def info(msg: str) -> None:
+    print(f"  {CYAN}{INFO}{RESET}  {msg}")
+
+
+def header(msg: str) -> None:
+    print(f"\n{BOLD}{CYAN}{msg}{RESET}")
 
 
 # ─── Checks ───────────────────────────────────────────────────────────────────
+
 
 def check_python() -> None:
     header("Python")
@@ -67,19 +80,19 @@ def check_venv() -> None:
 def check_packages() -> None:
     header("Python Packages")
     required = [
-        ("fastapi",            "fastapi"),
-        ("uvicorn",            "uvicorn"),
-        ("httpx",              "httpx"),
-        ("pydantic",           "pydantic"),
-        ("sqlalchemy",         "sqlalchemy"),
-        ("multipart",          "python-multipart"),
-        ("pypdf",              "pypdf"),
-        ("docx",               "python-docx"),
-        ("dotenv",             "python-dotenv"),
+        ("fastapi", "fastapi"),
+        ("uvicorn", "uvicorn"),
+        ("httpx", "httpx"),
+        ("pydantic", "pydantic"),
+        ("sqlalchemy", "sqlalchemy"),
+        ("multipart", "python-multipart"),
+        ("pypdf", "pypdf"),
+        ("docx", "python-docx"),
+        ("dotenv", "python-dotenv"),
     ]
     optional = [
-        ("pyodbc",             "pyodbc (ERP/SQL Server connector)"),
-        ("pytest",             "pytest (testing)"),
+        ("pyodbc", "pyodbc (ERP/SQL Server connector)"),
+        ("pytest", "pytest (testing)"),
     ]
     for mod, label in required:
         try:
@@ -132,7 +145,7 @@ def check_env() -> None:
                 env_vars[k.strip()] = v.strip()
 
     admin_key = env_vars.get("ADMIN_KEY", "change-me-admin-key")
-    user_key  = env_vars.get("USER_KEY",  "change-me-user-key")
+    user_key = env_vars.get("USER_KEY", "change-me-user-key")
 
     if "change-me" in admin_key:
         fail("ADMIN_KEY is still the default — change it immediately!")
@@ -147,10 +160,10 @@ def check_env() -> None:
     # LLM keys
     providers_configured: list[str] = []
     for env_key, provider in [
-        ("OPENAI_API_KEY",    "OpenAI"),
+        ("OPENAI_API_KEY", "OpenAI"),
         ("ANTHROPIC_API_KEY", "Anthropic Claude"),
-        ("GEMINI_API_KEY",    "Google Gemini"),
-        ("HF_TOKEN",          "HuggingFace"),
+        ("GEMINI_API_KEY", "Google Gemini"),
+        ("HF_TOKEN", "HuggingFace"),
     ]:
         if env_vars.get(env_key, ""):
             providers_configured.append(provider)
@@ -164,6 +177,7 @@ def check_ollama() -> None:
     header("Ollama (Local LLM)")
     try:
         import httpx as _httpx
+
         with _httpx.Client(timeout=3) as client:
             r = client.get("http://localhost:11434/api/tags")
             if r.status_code == 200:
@@ -185,7 +199,7 @@ def check_config() -> None:
     header("Configuration Files")
     settings = os.path.join(os.path.dirname(__file__), "config", "settings.json")
     if os.path.exists(settings):
-        ok(f"settings.json found")
+        ok("settings.json found")
     else:
         warn("config/settings.json not found — run: python setup.py")
 
@@ -197,7 +211,7 @@ def check_config() -> None:
 
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     if os.path.exists(data_dir):
-        ok(f"data/ directory exists")
+        ok("data/ directory exists")
     else:
         warn("data/ directory missing — will be created on first run")
 
@@ -213,6 +227,7 @@ def check_dashboard() -> None:
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
 
 def main() -> int:
     # Fix Windows console encoding for Unicode output
@@ -246,7 +261,9 @@ def main() -> int:
         print(f"  Start with: {CYAN}python start.py{RESET}")
         return 1
     else:
-        print(f"  {RED}{BOLD}{_errors} critical error(s), {_warnings} warning(s) — fix above before starting.{RESET}")
+        print(
+            f"  {RED}{BOLD}{_errors} critical error(s), {_warnings} warning(s) — fix above before starting.{RESET}"
+        )
         return 2
 
 

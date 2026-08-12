@@ -1,12 +1,12 @@
 """Hybrid RAG Search Engine.
 Combines BM25 keyword matching with Vector Embeddings cosine similarity and Reranking.
 """
+
 from __future__ import annotations
 
 import math
 import re
 from dataclasses import dataclass
-from typing import Any, List, Tuple
 
 
 @dataclass
@@ -22,20 +22,20 @@ class HybridRAGSearch:
     """Hybrid Search engine mixing BM25 and Vector Embeddings."""
 
     def __init__(self, k1: float = 1.5, b: float = 0.75):
-        self.chunks: List[DocumentChunk] = []
+        self.chunks: list[DocumentChunk] = []
         self.k1 = k1
         self.b = b
 
-    def add_chunks(self, chunks: List[DocumentChunk]) -> None:
+    def add_chunks(self, chunks: list[DocumentChunk]) -> None:
         self.chunks.extend(chunks)
 
-    def clear() -> None:
+    def clear(self) -> None:
         self.chunks = []
 
     def _tokenize(self, text: str) -> list[str]:
-        return [w.lower() for w in re.findall(r'\w+', text)]
+        return [w.lower() for w in re.findall(r"\w+", text)]
 
-    def bm25_search(self, query: str, top_k: int = 5) -> List[Tuple[DocumentChunk, float]]:
+    def bm25_search(self, query: str, top_k: int = 5) -> list[tuple[DocumentChunk, float]]:
         if not self.chunks:
             return []
 
@@ -72,14 +72,16 @@ class HybridRAGSearch:
     def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
         if not vec1 or not vec2 or len(vec1) != len(vec2):
             return 0.0
-        dot = sum(a * b for a, b in zip(vec1, vec2))
+        dot = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = math.sqrt(sum(a * a for a in vec1))
         norm2 = math.sqrt(sum(b * b for b in vec2))
         if norm1 == 0 or norm2 == 0:
             return 0.0
         return dot / (norm1 * norm2)
 
-    def vector_search(self, query_embedding: list[float], top_k: int = 5) -> List[Tuple[DocumentChunk, float]]:
+    def vector_search(
+        self, query_embedding: list[float], top_k: int = 5
+    ) -> list[tuple[DocumentChunk, float]]:
         if not self.chunks or not query_embedding:
             return []
 
@@ -97,11 +99,13 @@ class HybridRAGSearch:
         query: str,
         query_embedding: list[float] | None = None,
         top_k: int = 5,
-        alpha: float = 0.5
-    ) -> List[Tuple[DocumentChunk, float]]:
+        alpha: float = 0.5,
+    ) -> list[tuple[DocumentChunk, float]]:
         """Hybrid RAG combining BM25 and Vector search normalized scores."""
         bm25_results = self.bm25_search(query, top_k=top_k * 2)
-        vec_results = self.vector_search(query_embedding, top_k=top_k * 2) if query_embedding else []
+        vec_results = (
+            self.vector_search(query_embedding, top_k=top_k * 2) if query_embedding else []
+        )
 
         combined_scores: dict[str, float] = {}
         chunk_map: dict[str, DocumentChunk] = {}
@@ -111,7 +115,9 @@ class HybridRAGSearch:
         for chunk, score in bm25_results:
             cid = f"{chunk.doc_id}_{chunk.chunk_index}"
             chunk_map[cid] = chunk
-            combined_scores[cid] = combined_scores.get(cid, 0.0) + (1.0 - alpha) * (score / max_bm25)
+            combined_scores[cid] = combined_scores.get(cid, 0.0) + (1.0 - alpha) * (
+                score / max_bm25
+            )
 
         # Vector score is already 0..1
         for chunk, score in vec_results:

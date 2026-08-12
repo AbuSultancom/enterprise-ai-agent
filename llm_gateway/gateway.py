@@ -1,5 +1,6 @@
 """Unified LLM gateway: route requests to Ollama, OpenAI-compatible, HuggingFace,
 Anthropic Claude, or Google Gemini providers, with automatic fallback and retry."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,8 +8,9 @@ import json
 import logging
 import os
 import re
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 # ─── Retry helper ─────────────────────────────────────────────────────────────
+
 
 async def _retry(coro_fn, retries: int = 3, base_delay: float = 1.0):
     """Run *coro_fn()* with exponential-backoff retries on transient errors."""
@@ -26,9 +29,14 @@ async def _retry(coro_fn, retries: int = 3, base_delay: float = 1.0):
         except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
             last_err = exc
             if attempt < retries - 1:
-                delay = base_delay * (2 ** attempt)
-                logger.warning("LLM request failed (attempt %d/%d), retrying in %.1fs: %s",
-                               attempt + 1, retries, delay, exc)
+                delay = base_delay * (2**attempt)
+                logger.warning(
+                    "LLM request failed (attempt %d/%d), retrying in %.1fs: %s",
+                    attempt + 1,
+                    retries,
+                    delay,
+                    exc,
+                )
                 await asyncio.sleep(delay)
     raise last_err  # type: ignore[misc]
 
@@ -61,7 +69,9 @@ class OllamaProvider(BaseProvider):
     name = "ollama"
 
     def __init__(self, base_url: str | None = None):
-        self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
+        self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip(
+            "/"
+        )
 
     async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
         payload = {
@@ -78,7 +88,10 @@ class OllamaProvider(BaseProvider):
             content=data["message"]["content"],
             model=model,
             provider=self.name,
-            usage={"eval_count": data.get("eval_count"), "prompt_eval_count": data.get("prompt_eval_count")},
+            usage={
+                "eval_count": data.get("eval_count"),
+                "prompt_eval_count": data.get("prompt_eval_count"),
+            },
         )
 
 
@@ -88,7 +101,9 @@ class OpenAICompatibleProvider(BaseProvider):
     name = "openai"
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
-        self.base_url = (base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")).rstrip("/")
+        self.base_url = (
+            base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        ).rstrip("/")
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
 
     async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
@@ -101,7 +116,9 @@ class OpenAICompatibleProvider(BaseProvider):
             "temperature": kw.get("temperature", 0.3),
         }
         async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+            r = await client.post(
+                f"{self.base_url}/chat/completions", json=payload, headers=headers
+            )
             r.raise_for_status()
             data = r.json()
         return LLMResponse(
@@ -111,8 +128,14 @@ class OpenAICompatibleProvider(BaseProvider):
             usage=data.get("usage", {}),
         )
 
-    async def chat_vision(self, text: str, image_data: str, image_type: str = "url",
-                          model: str | None = None, max_tokens: int = 2000) -> str:
+    async def chat_vision(
+        self,
+        text: str,
+        image_data: str,
+        image_type: str = "url",
+        model: str | None = None,
+        max_tokens: int = 2000,
+    ) -> str:
         """Send an image + question to a vision-capable model.
 
         Args:
@@ -138,15 +161,11 @@ class OpenAICompatibleProvider(BaseProvider):
             # Extract MIME type if provided as "base64:image/jpeg"
             parts = image_type.split(":", 1)
             mime = parts[1] if len(parts) > 1 else "image/jpeg"
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{image_data}"}
-            })
+            content_parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_data}"}}
+            )
         else:
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": image_data}
-            })
+            content_parts.append({"type": "image_url", "image_url": {"url": image_data}})
 
         payload = {
             "model": model,
@@ -155,7 +174,9 @@ class OpenAICompatibleProvider(BaseProvider):
             "temperature": 0.2,
         }
         async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+            r = await client.post(
+                f"{self.base_url}/chat/completions", json=payload, headers=headers
+            )
             r.raise_for_status()
             data = r.json()
         return data["choices"][0]["message"]["content"]
@@ -174,9 +195,9 @@ class HuggingFaceProvider(BaseProvider):
     name = "huggingface"
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
-        self.base_url = (base_url or os.getenv(
-            "HF_BASE_URL", "https://api-inference.huggingface.co"
-        )).rstrip("/")
+        self.base_url = (
+            base_url or os.getenv("HF_BASE_URL", "https://api-inference.huggingface.co")
+        ).rstrip("/")
         self.api_key = api_key or os.getenv("HF_TOKEN", "")
 
     async def chat(self, messages: list[Message], model: str, **kw) -> LLMResponse:
@@ -271,6 +292,7 @@ class AnthropicProvider(BaseProvider):
             "anthropic-version": self.API_VERSION,
             "Content-Type": "application/json",
         }
+
         async def _call():
             async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(f"{self.BASE_URL}/messages", json=payload, headers=headers)
@@ -282,6 +304,7 @@ class AnthropicProvider(BaseProvider):
                 provider=self.name,
                 usage=data.get("usage", {}),
             )
+
         return await _retry(_call)
 
 
@@ -337,6 +360,7 @@ class GeminiProvider(BaseProvider):
                 provider=self.name,
                 usage=usage,
             )
+
         return await _retry(_call)
 
 
@@ -344,9 +368,12 @@ class PIIMasker:
     """Enterprise PII and Sensitive Data Masker.
     Masks sensitive data (credit cards, national IDs, tokens, keys) before sending payloads to cloud LLMs.
     """
-    CREDIT_CARD_REGEX = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
-    TOKEN_REGEX = re.compile(r'(?:bearer\s+[a-zA-Z0-9_\-\.=]+|api[_\-]?key["\s:=]+[a-zA-Z0-9_\-]{16,})', re.IGNORECASE)
-    SAUDI_ID_REGEX = re.compile(r'\b[12]\d{9}\b')
+
+    CREDIT_CARD_REGEX = re.compile(r"\b(?:\d[ -]*?){13,16}\b")
+    TOKEN_REGEX = re.compile(
+        r'(?:bearer\s+[a-zA-Z0-9_\-\.=]+|api[_\-]?key["\s:=]+[a-zA-Z0-9_\-]{16,})', re.IGNORECASE
+    )
+    SAUDI_ID_REGEX = re.compile(r"\b[12]\d{9}\b")
 
     @classmethod
     def mask_text(cls, text: str) -> str:
@@ -360,11 +387,7 @@ class PIIMasker:
     @classmethod
     def mask_messages(cls, messages: list[Message]) -> list[Message]:
         return [
-            Message(
-                role=m.role,
-                content=cls.mask_text(m.content),
-                name=m.name
-            ) for m in messages
+            Message(role=m.role, content=cls.mask_text(m.content), name=m.name) for m in messages
         ]
 
 
@@ -382,9 +405,11 @@ class LLMGateway:
             "gemini": GeminiProvider(),
         }
 
-    async def chat(self, messages: list[Message], model: str | None = None, mask_pii: bool = True, **kw) -> LLMResponse:
+    async def chat(
+        self, messages: list[Message], model: str | None = None, mask_pii: bool = True, **kw
+    ) -> LLMResponse:
         model = model or os.getenv("DEFAULT_MODEL", "ollama:qwen2.5:7b")
-        
+
         # Apply PII masking if requested
         if mask_pii:
             messages = PIIMasker.mask_messages(messages)
@@ -406,7 +431,9 @@ class LLMGateway:
                 if fb == "openai" and not fb_provider.api_key:
                     continue
                 try:
-                    fb_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini") if fb == "openai" else model_name
+                    fb_model = (
+                        os.getenv("OPENAI_MODEL", "gpt-4o-mini") if fb == "openai" else model_name
+                    )
                     res = await fb_provider.chat(messages, fb_model, **kw)
                     res.content = f"*(Fallback via {fb})*\n\n" + res.content
                     return res
@@ -428,8 +455,14 @@ class LLMGateway:
         status["huggingface"] = bool(self.providers["huggingface"].api_key)
         return status
 
-    async def chat_vision(self, text: str, image_data: str, image_type: str = "url",
-                          model: str | None = None, max_tokens: int = 2000) -> str:
+    async def chat_vision(
+        self,
+        text: str,
+        image_data: str,
+        image_type: str = "url",
+        model: str | None = None,
+        max_tokens: int = 2000,
+    ) -> str:
         """Analyze an image through a vision-capable model.
 
         Args:
@@ -446,7 +479,9 @@ class LLMGateway:
         return await provider.chat_vision(text, image_data, image_type, model, max_tokens)
 
     # ---- Streaming: yields text deltas as they arrive ----
-    async def chat_stream(self, messages: list[Message], model: str | None = None, **kw) -> AsyncGenerator[str, None]:
+    async def chat_stream(
+        self, messages: list[Message], model: str | None = None, **kw
+    ) -> AsyncGenerator[str, None]:
         model = model or os.getenv("DEFAULT_MODEL", "ollama:qwen2.5:7b")
         if ":" in model and model.split(":", 1)[0] in self.providers:
             provider_name, model_name = model.split(":", 1)
@@ -455,9 +490,12 @@ class LLMGateway:
 
         if provider_name == "ollama":
             url = f"{self.providers['ollama'].base_url}/api/chat"
-            payload = {"model": model_name, "stream": True,
-                       "messages": [{"role": m.role, "content": m.content} for m in messages],
-                       "options": {"temperature": kw.get("temperature", 0.3)}}
+            payload = {
+                "model": model_name,
+                "stream": True,
+                "messages": [{"role": m.role, "content": m.content} for m in messages],
+                "options": {"temperature": kw.get("temperature", 0.3)},
+            }
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=payload) as r:
                     async for line in r.aiter_lines():
@@ -481,9 +519,12 @@ class LLMGateway:
             headers = {}
             if p.api_key:
                 headers["Authorization"] = f"Bearer {p.api_key}"
-            payload = {"model": model_name, "stream": True,
-                       "messages": [{"role": m.role, "content": m.content} for m in messages],
-                       "temperature": kw.get("temperature", 0.3)}
+            payload = {
+                "model": model_name,
+                "stream": True,
+                "messages": [{"role": m.role, "content": m.content} for m in messages],
+                "temperature": kw.get("temperature", 0.3),
+            }
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=payload, headers=headers) as r:
                     if r.status_code != 200:
@@ -510,7 +551,9 @@ class LLMGateway:
         try:
             base = self.providers["ollama"].base_url
             async with httpx.AsyncClient(timeout=60) as client:
-                r = await client.post(f"{base}/api/embed", json={"model": embed_model, "input": texts})
+                r = await client.post(
+                    f"{base}/api/embed", json={"model": embed_model, "input": texts}
+                )
                 r.raise_for_status()
                 return r.json().get("embeddings")
         except Exception:
@@ -523,9 +566,14 @@ class LLMGateway:
                 if p.api_key:
                     headers["Authorization"] = f"Bearer {p.api_key}"
                 async with httpx.AsyncClient(timeout=60) as client:
-                    r = await client.post(f"{p.base_url}/embeddings", headers=headers,
-                                          json={"model": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
-                                                "input": texts})
+                    r = await client.post(
+                        f"{p.base_url}/embeddings",
+                        headers=headers,
+                        json={
+                            "model": os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small"),
+                            "input": texts,
+                        },
+                    )
                     r.raise_for_status()
                     data = r.json().get("data", [])
                     return [d["embedding"] for d in sorted(data, key=lambda x: x["index"])]

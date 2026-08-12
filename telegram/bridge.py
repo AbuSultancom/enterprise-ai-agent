@@ -10,11 +10,11 @@ Config via environment variables:
   AGENT_URL            — agent API base URL (default http://localhost:8000)
   USER_KEY / ADMIN_KEY + WHATSAPP_ROLE — which API key to use (default: user)
 """
+
 from __future__ import annotations
 
 import asyncio
 import os
-import re
 import sys
 
 import httpx
@@ -41,14 +41,15 @@ def allowed(msg: dict) -> bool:
 async def reply(client: httpx.AsyncClient, chat_id: int, text: str) -> None:
     # Telegram message limit is 4096 chars
     for i in range(0, len(text), 4000):
-        await client.post(f"{API}/sendMessage",
-                          json={"chat_id": chat_id, "text": text[i:i + 4000]})
+        await client.post(
+            f"{API}/sendMessage", json={"chat_id": chat_id, "text": text[i : i + 4000]}
+        )
 
 
 async def ask_agent(client: httpx.AsyncClient, text: str) -> str:
-    r = await client.post(f"{AGENT_URL}/v1/chat",
-                          headers={"X-API-Key": API_KEY},
-                          json={"message": text}, timeout=180)
+    r = await client.post(
+        f"{AGENT_URL}/v1/chat", headers={"X-API-Key": API_KEY}, json={"message": text}, timeout=180
+    )
     if r.status_code != 200:
         return f"Agent error: {r.status_code}"
     return r.json().get("answer", "No answer.")
@@ -70,8 +71,7 @@ async def main() -> None:
 
         while True:
             try:
-                r = await client.get(f"{API}/getUpdates",
-                                     params={"offset": offset, "timeout": 30})
+                r = await client.get(f"{API}/getUpdates", params={"offset": offset, "timeout": 30})
                 for upd in r.json().get("result", []):
                     offset = upd["update_id"] + 1
                     msg = upd.get("message") or {}
@@ -85,12 +85,13 @@ async def main() -> None:
                     if PREFIX:
                         if not text.startswith(PREFIX):
                             continue
-                        text = text[len(PREFIX):].strip()
+                        text = text[len(PREFIX) :].strip()
                         if not text:
                             continue
                     print(f"[{msg.get('from', {}).get('username', '?')}] {text[:80]}")
-                    await client.post(f"{API}/sendChatAction",
-                                      json={"chat_id": chat_id, "action": "typing"})
+                    await client.post(
+                        f"{API}/sendChatAction", json={"chat_id": chat_id, "action": "typing"}
+                    )
                     try:
                         answer = await ask_agent(client, text)
                     except Exception as e:

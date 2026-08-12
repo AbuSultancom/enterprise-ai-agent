@@ -1,9 +1,9 @@
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email import encoders
 import os
+import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
@@ -18,7 +18,10 @@ msg["From"] = username
 msg["To"] = to
 msg["Subject"] = subject
 
-text = MIMEText("Dear KAST,\n\nPlease find attached the POA document for request 476575.\n\nBest regards,\nAbdulhameed", "plain")
+text = MIMEText(
+    "Dear KAST,\n\nPlease find attached the POA document for request 476575.\n\nBest regards,\nAbdulhameed",
+    "plain",
+)
 msg.attach(text)
 
 filepath = r"C:\Users\alyhy\poa_document.pdf"

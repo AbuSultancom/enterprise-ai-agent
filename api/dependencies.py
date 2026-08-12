@@ -1,4 +1,5 @@
 """Shared FastAPI dependencies: authentication, role checking, audit helper."""
+
 from __future__ import annotations
 
 import datetime
@@ -9,6 +10,7 @@ from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 
 # ─── API Key store (key → role) ──────────────────────────────────────────────
+
 
 def _build_api_keys() -> dict[str, str]:
     keys: dict[str, str] = {}
@@ -46,7 +48,9 @@ def require_role(*roles: str):
 
 AUDIT_PATH = os.getenv(
     "AUDIT_LOG_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "audit.jsonl"),
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "audit.jsonl"
+    ),
 )
 
 _MAX_AUDIT_BYTES = 50 * 1024 * 1024  # 50 MB — rotate when exceeded
@@ -63,7 +67,7 @@ def audit(event: str, role: str, detail: dict) -> None:
             os.rename(AUDIT_PATH, rotated)
 
         entry = {
-            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "ts": datetime.datetime.now(datetime.UTC).isoformat(),
             "event": event,
             "role": role,
             **detail,

@@ -15,6 +15,7 @@ Backward compatible: if ACCOUNTING_DB_URL env var is set without a
 config file, or the config file uses the legacy v1 format, the
 connector auto-migrates to the new multi-DB format.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,22 +25,25 @@ from dataclasses import dataclass, field
 from typing import Any
 
 try:
-    from sqlalchemy import create_engine, text, inspect
+    from sqlalchemy import create_engine, inspect, text
     from sqlalchemy.engine import Engine
+
     HAS_SQLALCHEMY = True
 except ImportError:
     HAS_SQLALCHEMY = False
 
 # Oracle driver (optional)
 try:
-    import oracledb
+    import oracledb  # noqa: F401  (driver availability check)
+
     ORACLE_AVAILABLE = True
 except ImportError:
     ORACLE_AVAILABLE = False
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA_CONFIG_PATH = os.getenv("ACCOUNTING_SCHEMA_PATH",
-                               os.path.join(ROOT, "config", "accounting_schema.json"))
+SCHEMA_CONFIG_PATH = os.getenv(
+    "ACCOUNTING_SCHEMA_PATH", os.path.join(ROOT, "config", "accounting_schema.json")
+)
 READONLY_PATTERN = re.compile(r"^\s*(?:--[^\n]*\n\s*)*(SELECT|WITH)\b", re.IGNORECASE | re.DOTALL)
 # Reject queries that contain semicolons (multi-statement) to prevent second-statement injection
 HAS_SEMICOLON = re.compile(r";\s*\S", re.DOTALL)
@@ -247,7 +251,7 @@ class SchemaConfig:
     query_aliases: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SchemaConfig":
+    def from_dict(cls, data: dict) -> SchemaConfig:
         """Build from a database entry dict (inside the multi-DB config)."""
         tables = dict(DEFAULT_SCHEMA["tables"])
         for key, val in data.get("tables", {}).items():
@@ -267,8 +271,7 @@ class SchemaConfig:
     def to_dict(self) -> dict:
         """Serialize back to a database entry dict."""
         clean_tables = {
-            k: {kk: vv for kk, vv in v.items() if kk != "alias"}
-            for k, v in self.tables.items()
+            k: {kk: vv for kk, vv in v.items() if kk != "alias"} for k, v in self.tables.items()
         }
         return {
             "name": self.name,
@@ -302,8 +305,10 @@ CONFIG_DEFAULT = {
             "name": "Onyx Pro",
             "db_url": "",
             "enabled": True,
-            "tables": {k: {kk: vv for kk, vv in v.items() if kk != "alias"}
-                       for k, v in DEFAULT_SCHEMA["tables"].items()},
+            "tables": {
+                k: {kk: vv for kk, vv in v.items() if kk != "alias"}
+                for k, v in DEFAULT_SCHEMA["tables"].items()
+            },
         },
     },
 }
@@ -412,7 +417,16 @@ DISCOVERY_HEURISTICS = {
         "columns": {
             "number": ["invoiceno", "invoice_no", "inv_no", "invno", "number", "رقم_الفاتورة"],
             "date": ["invoicedate", "invoice_date", "inv_date", "date", "تاريخ"],
-            "net_total": ["nettotal", "net_total", "total", "total_amount", "amount", "net", "الإجمالي", "الصافي"],
+            "net_total": [
+                "nettotal",
+                "net_total",
+                "total",
+                "total_amount",
+                "amount",
+                "net",
+                "الإجمالي",
+                "الصافي",
+            ],
             "tax": ["taxamount", "tax_amount", "tax", "ضريبة"],
             "status": ["status", "حالة", "state"],
             "customer_id": ["customerid", "customer_id", "cust_id", "رقم_العميل"],
@@ -576,10 +590,7 @@ class AccountingConnector:
     @property
     def available(self) -> bool:
         """True if at least one database is configured and has a URL."""
-        return any(
-            s.db_url and HAS_SQLALCHEMY
-            for s in self._databases.values()
-        )
+        return any(s.db_url and HAS_SQLALCHEMY for s in self._databases.values())
 
     @property
     def default_db(self) -> str | None:
@@ -601,19 +612,22 @@ class AccountingConnector:
             engine_key = f"{db_key}"
             engine = self._engines.get(engine_key)
             connected = engine is not None
-            result.append({
-                "key": db_key,
-                "name": schema.name,
-                "enabled": schema.enabled,
-                "has_url": bool(schema.db_url),
-                "connected": connected,
-                "table_count": len(schema.tables),
-                "query_count": len(schema.get_resolved_queries()),
-            })
+            result.append(
+                {
+                    "key": db_key,
+                    "name": schema.name,
+                    "enabled": schema.enabled,
+                    "has_url": bool(schema.db_url),
+                    "connected": connected,
+                    "table_count": len(schema.tables),
+                    "query_count": len(schema.get_resolved_queries()),
+                }
+            )
         return result
 
-    def add_database(self, db_key: str, name: str, db_url: str,
-                     schema: SchemaConfig | None = None) -> SchemaConfig:
+    def add_database(
+        self, db_key: str, name: str, db_url: str, schema: SchemaConfig | None = None
+    ) -> SchemaConfig:
         """
         Add a new database to the config. Returns the SchemaConfig.
         If schema is None, uses the default Onyx Pro schema.
@@ -621,9 +635,7 @@ class AccountingConnector:
         if db_key in self._databases:
             raise ValueError(f"Database key '{db_key}' already exists")
 
-        schema = schema or SchemaConfig(
-            version=1, name=name, db_url=db_url, enabled=True
-        )
+        schema = schema or SchemaConfig(version=1, name=name, db_url=db_url, enabled=True)
         schema.db_url = db_url
         schema.name = name
         self._databases[db_key] = schema
@@ -649,9 +661,7 @@ class AccountingConnector:
             )
         schema = self._databases.get(key)
         if schema is None:
-            raise ValueError(
-                f"Database '{key}' not found. Available: {list(self._databases)}"
-            )
+            raise ValueError(f"Database '{key}' not found. Available: {list(self._databases)}")
         return schema
 
     def _get_engine(self, db_name: str | None = None) -> Engine:
@@ -664,9 +674,7 @@ class AccountingConnector:
             )
         schema = self._get_schema(key)
         if not schema.db_url:
-            raise RuntimeError(
-                f"Database '{key}' has no db_url configured."
-            )
+            raise RuntimeError(f"Database '{key}' has no db_url configured.")
         if not HAS_SQLALCHEMY:
             raise RuntimeError(
                 "SQLAlchemy not installed. "
@@ -676,9 +684,7 @@ class AccountingConnector:
 
         engine_key = f"{key}"
         if engine_key not in self._engines:
-            self._engines[engine_key] = create_engine(
-                schema.db_url, pool_size=2, pool_recycle=1800
-            )
+            self._engines[engine_key] = create_engine(schema.db_url, pool_size=2, pool_recycle=1800)
         return self._engines[engine_key]
 
     # ─── Test / Schema info ───────────────────────────────────
@@ -690,21 +696,27 @@ class AccountingConnector:
             return {"key": None, "connected": False, "error": "No database configured"}
         schema = self._get_schema(key)
         if not schema.db_url:
-            return {"key": key, "name": schema.name, "connected": False,
-                    "error": "No database URL configured"}
+            return {
+                "key": key,
+                "name": schema.name,
+                "connected": False,
+                "error": "No database URL configured",
+            }
         if not HAS_SQLALCHEMY:
-            return {"key": key, "name": schema.name, "connected": False,
-                    "error": "SQLAlchemy not installed"}
+            return {
+                "key": key,
+                "name": schema.name,
+                "connected": False,
+                "error": "SQLAlchemy not installed",
+            }
         try:
             engine = self._get_engine(key)
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             host = str(engine.url).split("@")[-1] if "@" in str(engine.url) else str(engine.url)
-            return {"key": key, "name": schema.name, "connected": True,
-                    "database": host}
+            return {"key": key, "name": schema.name, "connected": True, "database": host}
         except Exception as e:
-            return {"key": key, "name": schema.name, "connected": False,
-                    "error": str(e)[:200]}
+            return {"key": key, "name": schema.name, "connected": False, "error": str(e)[:200]}
 
     def get_schema_info(self, db_name: str | None = None) -> dict:
         """Return current schema mapping for display/debug."""
@@ -731,7 +743,9 @@ class AccountingConnector:
 
     # ─── Query execution ──────────────────────────────────────
 
-    def run(self, query_name: str, db_name: str | None = None, **params: Any) -> list[dict[str, Any]]:
+    def run(
+        self, query_name: str, db_name: str | None = None, **params: Any
+    ) -> list[dict[str, Any]]:
         """
         Run a whitelisted read-only query on the specified database.
 
@@ -750,8 +764,7 @@ class AccountingConnector:
         sql = queries.get(query_name)
         if sql is None:
             raise ValueError(
-                f"Unknown query '{query_name}' for database '{key}'. "
-                f"Available: {list(queries)}"
+                f"Unknown query '{query_name}' for database '{key}'. " f"Available: {list(queries)}"
             )
         if not READONLY_PATTERN.match(sql):
             raise PermissionError("Only read-only (SELECT) queries are allowed.")
@@ -762,7 +775,7 @@ class AccountingConnector:
                 result = conn.execute(text(sql), params)
                 return [dict(row) for row in result.mappings()]
         except Exception as e:
-            raise RuntimeError(f"Query '{query_name}' on '{key}' failed: {e}")
+            raise RuntimeError(f"Query '{query_name}' on '{key}' failed: {e}") from e
 
     # ─── Backward-compat shims ─────────────────────────────────
     # These let old code that calls connector.run("query", key=val) keep working

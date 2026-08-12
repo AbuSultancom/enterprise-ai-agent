@@ -1,4 +1,6 @@
+# ruff: noqa: E402  (tool imports below are intentionally placed after tool registration)
 """Built-in tools shipped with the platform. Add your own in tools/custom/."""
+
 from __future__ import annotations
 
 import base64
@@ -13,10 +15,13 @@ from .registry import registry
 
 @registry.register(
     description="Search through past conversations to recall what was discussed.",
-    parameters={"query": {"type": "str", "description": "What to search for in past conversations"}},
+    parameters={
+        "query": {"type": "str", "description": "What to search for in past conversations"}
+    },
 )
 def search_conversations(query: str) -> str:
     from memory.conversation import get_store
+
     store = get_store()
     results = store.search(query, limit=8)
     if not results:
@@ -36,8 +41,10 @@ def search_conversations(query: str) -> str:
 )
 def generate_report(title: str, content: str) -> str:
     import datetime
-    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                               "data", "reports")
+
+    reports_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "reports"
+    )
     os.makedirs(reports_dir, exist_ok=True)
     safe_name = "".join(c for c in title if c.isalnum() or c in " _-").strip() or "report"
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -55,8 +62,9 @@ def generate_report(title: str, content: str) -> str:
     parameters={},
 )
 def list_reports() -> str:
-    reports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                               "data", "reports")
+    reports_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "reports"
+    )
     if not os.path.isdir(reports_dir):
         return "No reports found yet."
     files = sorted(os.listdir(reports_dir), reverse=True)
@@ -88,20 +96,26 @@ def calculator(expression: str) -> str:
     import operator as _operator
 
     allowed_ops = {
-        ast.Add: _operator.add, ast.Sub: _operator.sub,
-        ast.Mult: _operator.mul, ast.Div: _operator.truediv,
-        ast.FloorDiv: _operator.floordiv, ast.Mod: _operator.mod,
-        ast.Pow: _operator.pow, ast.USub: _operator.neg,
+        ast.Add: _operator.add,
+        ast.Sub: _operator.sub,
+        ast.Mult: _operator.mul,
+        ast.Div: _operator.truediv,
+        ast.FloorDiv: _operator.floordiv,
+        ast.Mod: _operator.mod,
+        ast.Pow: _operator.pow,
+        ast.USub: _operator.neg,
         ast.UAdd: _operator.pos,
     }
     allowed_funcs = {
-        "abs": abs, "round": round, "min": min, "max": max,
-        "pow": pow, "sum": sum,
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "pow": pow,
+        "sum": sum,
     }
     # Expose math module functions by name
-    allowed_funcs.update(
-        {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
-    )
+    allowed_funcs.update({k: getattr(math, k) for k in dir(math) if not k.startswith("_")})
 
     def _eval(node):
         if isinstance(node, ast.Expression):
@@ -147,6 +161,7 @@ async def web_search(query: str) -> str:
     """Search the web and return top results (title + snippet + url)."""
     try:
         from ddgs import DDGS
+
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=8))
         if not results:
@@ -170,6 +185,7 @@ async def web_search(query: str) -> str:
 )
 def read_file(path: str) -> str:
     import os.path
+
     base = os.getenv("WORKSPACE_PATH", "/data/workspace")
     # Resolve to an absolute path and ensure it stays under the workspace base
     abs_base = os.path.abspath(base)
@@ -186,8 +202,14 @@ def read_file(path: str) -> str:
 @registry.register(
     description="Analyze an image (invoice, receipt, screenshot, document) through the LLM's vision API. Supports both image URLs and local file paths.",
     parameters={
-        "image": {"type": "str", "description": "Image URL (https://...) or local file path relative to /data/workspace"},
-        "question": {"type": "str", "description": "Optional: what to ask about the image (default: read and extract all important data)"},
+        "image": {
+            "type": "str",
+            "description": "Image URL (https://...) or local file path relative to /data/workspace",
+        },
+        "question": {
+            "type": "str",
+            "description": "Optional: what to ask about the image (default: read and extract all important data)",
+        },
     },
 )
 async def read_image(image: str, question: str = "") -> str:
@@ -214,8 +236,14 @@ async def read_image(image: str, question: str = "") -> str:
                 raw = f.read()
             # Detect MIME type from extension
             ext = os.path.splitext(abs_path)[1].lower()
-            mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+            mime_map = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+                ".bmp": "image/bmp",
+            }
             mime = mime_map.get(ext, "image/jpeg")
             image_data = base64.b64encode(raw).decode("utf-8")
             image_type = f"base64:{mime}"
@@ -224,6 +252,7 @@ async def read_image(image: str, question: str = "") -> str:
 
     try:
         from llm_gateway.gateway import LLMGateway
+
         gateway = LLMGateway()
         result = await gateway.chat_vision(question, image_data, image_type)
         return result
@@ -233,11 +262,12 @@ async def read_image(image: str, question: str = "") -> str:
 
 @registry.register(
     description="Get current weather for any city worldwide.",
-    parameters={"city": {"type": "str", "description": "City name (e.g. 'Riyadh', 'Dubai', 'London')"}},
+    parameters={
+        "city": {"type": "str", "description": "City name (e.g. 'Riyadh', 'Dubai', 'London')"}
+    },
 )
 async def get_weather(city: str) -> str:
     """Get weather from wttr.in (no API key needed)."""
-    import httpx
     try:
         url = f"https://wttr.in/{city}?format=%C+%t+%h+%w"
         async with httpx.AsyncClient(timeout=10) as client:
@@ -254,12 +284,14 @@ async def get_weather(city: str) -> str:
     description="Get current currency exchange rate between two currencies.",
     parameters={
         "from_currency": {"type": "str", "description": "Source currency code (e.g. 'USD', 'SAR')"},
-        "to_currency": {"type": "str", "description": "Target currency code (e.g. 'SAR', 'EUR', 'TRY')"},
+        "to_currency": {
+            "type": "str",
+            "description": "Target currency code (e.g. 'SAR', 'EUR', 'TRY')",
+        },
     },
 )
 async def get_currency_rate(from_currency: str, to_currency: str) -> str:
     """Get exchange rate from free API."""
-    import httpx
     try:
         from_currency = from_currency.upper()[:3]
         to_currency = to_currency.upper()[:3]
@@ -272,7 +304,7 @@ async def get_currency_rate(from_currency: str, to_currency: str) -> str:
                 if rate:
                     return f"💰 1 {from_currency} = {rate:.4f} {to_currency}"
                 return f"Currency '{to_currency}' not found."
-            return f"Could not get exchange rate."
+            return "Could not get exchange rate."
     except Exception as e:
         return f"Currency error: {e}"
 
@@ -290,27 +322,37 @@ async def get_currency_rate(from_currency: str, to_currency: str) -> str:
 )
 async def tasi_stocks(symbol: str) -> str:
     """Get Saudi stock price from Argaam/Tadawul. Returns price, change, volume."""
-    import httpx
     try:
         symbol = symbol.strip()
         url = f"https://www.argaam.com/ar/company/companyoverview/{symbol}"
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            r = await client.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            })
+            r = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                },
+            )
             if r.status_code != 200:
                 # Fallback: try the screener endpoint
-                alt_url = f"https://www.argaam.com/ar/screener/company/data/overview?companyId={symbol}"
-                r = await client.get(alt_url, headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                })
+                alt_url = (
+                    f"https://www.argaam.com/ar/screener/company/data/overview?companyId={symbol}"
+                )
+                r = await client.get(
+                    alt_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    },
+                )
                 if r.status_code != 200:
                     return f"⚠️ Could not retrieve stock data for {symbol}. The symbol might be incorrect."
             text = r.text
             # Try to extract price from page
             import re
+
             price_match = re.search(r'<span[^>]*class="[^"]*price[^"]*"[^>]*>([\d.,]+)', text)
-            change_match = re.search(r'<span[^>]*class="[^"]*change[^"]*"[^>]*>([+-]?[\d.,]+)', text)
+            change_match = re.search(
+                r'<span[^>]*class="[^"]*change[^"]*"[^>]*>([+-]?[\d.,]+)', text
+            )
             if price_match:
                 price = price_match.group(1)
                 change = change_match.group(1) if change_match else "N/A"
@@ -329,8 +371,11 @@ async def tasi_stocks(symbol: str) -> str:
     description="Calculate Saudi Value Added Tax (VAT) at 15%.",
     parameters={
         "amount": {"type": "number", "description": "Amount in SAR"},
-        "inclusive": {"type": "bool", "description": "Whether the amount already includes VAT (True to extract VAT, False to add VAT)",
-                       "default": False},
+        "inclusive": {
+            "type": "bool",
+            "description": "Whether the amount already includes VAT (True to extract VAT, False to add VAT)",
+            "default": False,
+        },
     },
 )
 async def vat_calc(amount: float, inclusive: bool = False) -> str:
@@ -434,7 +479,11 @@ async def loan_calc(amount: float, interest_rate: float, months: int) -> str:
         if monthly_rate == 0:
             monthly_payment = amount / months
         else:
-            monthly_payment = amount * (monthly_rate * (1 + monthly_rate) ** months) / ((1 + monthly_rate) ** months - 1)
+            monthly_payment = (
+                amount
+                * (monthly_rate * (1 + monthly_rate) ** months)
+                / ((1 + monthly_rate) ** months - 1)
+            )
         total_payment = monthly_payment * months
         total_interest = total_payment - amount
         return (
@@ -457,11 +506,21 @@ async def loan_calc(amount: float, interest_rate: float, months: int) -> str:
     parameters={
         "cash": {"type": "number", "description": "Available cash (SAR)", "default": 0},
         "gold_value": {"type": "number", "description": "Value of gold owned (SAR)", "default": 0},
-        "stocks_value": {"type": "number", "description": "Value of stocks owned (SAR)", "default": 0},
-        "debts": {"type": "number", "description": "Outstanding debts to subtract (SAR)", "default": 0},
+        "stocks_value": {
+            "type": "number",
+            "description": "Value of stocks owned (SAR)",
+            "default": 0,
+        },
+        "debts": {
+            "type": "number",
+            "description": "Outstanding debts to subtract (SAR)",
+            "default": 0,
+        },
     },
 )
-async def zakat_calc(cash: float = 0, gold_value: float = 0, stocks_value: float = 0, debts: float = 0) -> str:
+async def zakat_calc(
+    cash: float = 0, gold_value: float = 0, stocks_value: float = 0, debts: float = 0
+) -> str:
     """Zakat calculator. Zakat rate = 2.5%. Returns total wealth and zakat due."""
     try:
         total_wealth = cash + gold_value + stocks_value
@@ -495,6 +554,7 @@ async def contract_days(start_date: str, end_date: str) -> str:
     """Calculate days between two dates. Returns total days, weeks, months."""
     try:
         from datetime import datetime
+
         start = datetime.strptime(start_date, "%Y-%m-%d")
         end = datetime.strptime(end_date, "%Y-%m-%d")
         delta = end - start
@@ -525,7 +585,10 @@ async def contract_days(start_date: str, end_date: str) -> str:
     parameters={
         "salary": {"type": "number", "description": "آخر راتب شهري (ريال)"},
         "years": {"type": "number", "description": "عدد سنوات الخدمة"},
-        "reason": {"type": "str", "description": "سبب إنهاء الخدمة: 'resign' (استقالة) أو 'termination' (فصل/إنهاء)"},
+        "reason": {
+            "type": "str",
+            "description": "سبب إنهاء الخدمة: 'resign' (استقالة) أو 'termination' (فصل/إنهاء)",
+        },
     },
 )
 async def end_service(salary: float, years: float, reason: str) -> str:
@@ -561,11 +624,11 @@ async def end_service(salary: float, years: float, reason: str) -> str:
                 breakdown = "لا تستحق مكافأة نهاية خدمة إذا كانت مدة الخدمة أقل من سنتين."
             elif years < 5:
                 reward = termination_reward / 3
-                reason_label = f"استقالة (بين سنتين و5 سنوات)"
+                reason_label = "استقالة (بين سنتين و5 سنوات)"
                 breakdown = f"تستحق ثلث مكافأة الفصل: {termination_reward:,.2f} / 3"
             elif years < 10:
                 reward = termination_reward * 2 / 3
-                reason_label = f"استقالة (بين 5 و10 سنوات)"
+                reason_label = "استقالة (بين 5 و10 سنوات)"
                 breakdown = f"تستحق ثلثي مكافأة الفصل: {termination_reward:,.2f} × 2/3"
             else:
                 reward = termination_reward
@@ -598,6 +661,7 @@ async def company_search(query: str) -> str:
     """Search for a Saudi company by name or commercial registration number via web search."""
     try:
         from ddgs import DDGS
+
         search_query = f"منشأة {query} السعودية سجل تجاري"
         with DDGS() as ddgs:
             results = list(ddgs.text(search_query, max_results=5))
@@ -631,11 +695,16 @@ async def company_search(query: str) -> str:
     description="حاسبة نقطة التعادل — حساب عدد الوحدات والإيرادات المطلوبة لتحقيق التعادل",
     parameters={
         "fixed_costs": {"type": "number", "description": "التكاليف الثابتة (ريال)"},
-        "variable_cost_per_unit": {"type": "number", "description": "التكلفة المتغيرة للوحدة (ريال)"},
+        "variable_cost_per_unit": {
+            "type": "number",
+            "description": "التكلفة المتغيرة للوحدة (ريال)",
+        },
         "selling_price_per_unit": {"type": "number", "description": "سعر بيع الوحدة (ريال)"},
     },
 )
-async def break_even(fixed_costs: float, variable_cost_per_unit: float, selling_price_per_unit: float) -> str:
+async def break_even(
+    fixed_costs: float, variable_cost_per_unit: float, selling_price_per_unit: float
+) -> str:
     """Break-even point calculator. Returns break-even units and revenue."""
     try:
         if selling_price_per_unit <= variable_cost_per_unit:
@@ -657,20 +726,26 @@ async def break_even(fixed_costs: float, variable_cost_per_unit: float, selling_
     except Exception as e:
         return f"⚠️ خطأ في حساب نقطة التعادل: {e}"
 
+
 # ─── Employee Directory ──────────────────────────────────────────
-from tools.directory import search_employee as _search_emp, add_employee as _add_emp
+from tools.directory import add_employee as _add_emp
+from tools.directory import search_employee as _search_emp
+from tools.huggingface import analyze_sentiment as _hf_sentiment
+from tools.huggingface import summarize_text as _hf_summarize
 
 # ─── Hugging Face Tools ──────────────────────────────────────────
 from tools.huggingface import translate_text as _hf_translate
-from tools.huggingface import summarize_text as _hf_summarize
-from tools.huggingface import analyze_sentiment as _hf_sentiment
 
 
 @registry.register(
     description="Translate text between Arabic and English. Auto-detects direction — use for Arabic↔English translation.",
     parameters={
         "text": {"type": "str", "description": "Text to translate"},
-        "source_lang": {"type": "str", "description": "Source language: 'ar' or 'en' (empty = auto-detect)", "default": ""},
+        "source_lang": {
+            "type": "str",
+            "description": "Source language: 'ar' or 'en' (empty = auto-detect)",
+            "default": "",
+        },
     },
 )
 async def translate_text(text: str, source_lang: str = "") -> str:
@@ -697,12 +772,19 @@ async def summarize_text(text: str, max_length: float = 130) -> str:
 async def analyze_sentiment(text: str) -> str:
     return await _hf_sentiment(text)
 
+
 @registry.register(
-    description="Search employees by name, department, role, or phone. Use when asked about employee contact info, \"رقم فلان\", or \"من يعمل في قسم كذا\".",
-    parameters={"query": {"type": "str", "description": "Search term (name, department, role, phone) — empty for all employees"}}
+    description='Search employees by name, department, role, or phone. Use when asked about employee contact info, "رقم فلان", or "من يعمل في قسم كذا".',
+    parameters={
+        "query": {
+            "type": "str",
+            "description": "Search term (name, department, role, phone) — empty for all employees",
+        }
+    },
 )
 async def search_employee_tool(query: str = "") -> str:
     return await _search_emp(query)
+
 
 @registry.register(
     description="Add a new employee to the company directory.",
@@ -713,77 +795,132 @@ async def search_employee_tool(query: str = "") -> str:
         "phone": {"type": "str", "description": "Phone number"},
         "email": {"type": "str", "description": "Email"},
         "name_en": {"type": "str", "description": "English name (optional)"},
-    }
+    },
 )
-async def add_employee_tool(name: str, role: str = "", department: str = "",
-                            phone: str = "", email: str = "", name_en: str = "") -> str:
+async def add_employee_tool(
+    name: str,
+    role: str = "",
+    department: str = "",
+    phone: str = "",
+    email: str = "",
+    name_en: str = "",
+) -> str:
     return await _add_emp(name, role, department, phone, email, name_en)
 
 
 # ─── Admin Settings Tools ───────────────────────────────────────
 from tools.settings import (
-    change_model as _cm, change_language as _cl,
-    change_personality as _cp, toggle_tool as _tt,
-    change_whatsapp_prefix as _cwp, add_api_key as _aak,
-    toggle_channel as _tc, add_provider as _ap,
-    restart_agent as _ra, show_current_config as _scc,
+    add_api_key as _aak,
 )
+from tools.settings import (
+    add_provider as _ap,
+)
+from tools.settings import (
+    change_language as _cl,
+)
+from tools.settings import (
+    change_model as _cm,
+)
+from tools.settings import (
+    change_personality as _cp,
+)
+from tools.settings import (
+    change_whatsapp_prefix as _cwp,
+)
+from tools.settings import (
+    restart_agent as _ra,
+)
+from tools.settings import (
+    show_current_config as _scc,
+)
+from tools.settings import (
+    toggle_channel as _tc,
+)
+from tools.settings import (
+    toggle_tool as _tt,
+)
+
 
 @registry.register(
     description="Change the AI model/provider. Use when asked to change model.",
-    parameters={"provider":{"type":"str","description":"Provider: ollama, openai, deepseek, custom"},"model":{"type":"str","description":"Model name"}},
+    parameters={
+        "provider": {"type": "str", "description": "Provider: ollama, openai, deepseek, custom"},
+        "model": {"type": "str", "description": "Model name"},
+    },
 )
 async def change_model_tool(provider: str, model: str) -> str:
     return await _cm(provider, model)
 
+
 @registry.register(
     description="Change agent response language. Use for toggle Arabic/English.",
-    parameters={"language":{"type":"str","description":"ar, en, or auto"}},
+    parameters={"language": {"type": "str", "description": "ar, en, or auto"}},
 )
 async def change_language_tool(language: str) -> str:
     return await _cl(language)
 
+
 @registry.register(
     description="Change agent personality/style. Use when user wants agent to be more formal, friendly, etc.",
-    parameters={"personality":{"type":"str","description":"New personality description"}},
+    parameters={"personality": {"type": "str", "description": "New personality description"}},
 )
 async def change_personality_tool(personality: str) -> str:
     return await _cp(personality)
 
+
 @registry.register(
     description="Enable or disable a tool. Use when user wants to turn off/on a feature.",
-    parameters={"tool_name":{"type":"str","description":"Tool name"},"enabled":{"type":"bool","description":"True=enable, False=disable"}},
+    parameters={
+        "tool_name": {"type": "str", "description": "Tool name"},
+        "enabled": {"type": "bool", "description": "True=enable, False=disable"},
+    },
 )
 async def toggle_tool_tool(tool_name: str, enabled: bool = True) -> str:
     return await _tt(tool_name, enabled)
 
+
 @registry.register(
     description="Change WhatsApp bot prefix. Use to set/remove the prefix word.",
-    parameters={"prefix":{"type":"str","description":"New prefix (empty=respond to all)"}},
+    parameters={"prefix": {"type": "str", "description": "New prefix (empty=respond to all)"}},
 )
 async def change_whatsapp_prefix_tool(prefix: str) -> str:
     return await _cwp(prefix)
 
+
 @registry.register(
     description="Add or update an API key. Use when user gives a new key.",
-    parameters={"name":{"type":"str","description":"Key name (openai, deepseek, custom)"},"key":{"type":"str","description":"The API key"}},
+    parameters={
+        "name": {"type": "str", "description": "Key name (openai, deepseek, custom)"},
+        "key": {"type": "str", "description": "The API key"},
+    },
 )
 async def add_api_key_tool(name: str, key: str) -> str:
     return await _aak(name, key)
 
+
 @registry.register(
     description="Enable or disable a channel (WhatsApp/Telegram).",
-    parameters={"channel":{"type":"str","description":"whatsapp or telegram"},"enabled":{"type":"bool","description":"True=enable"}},
+    parameters={
+        "channel": {"type": "str", "description": "whatsapp or telegram"},
+        "enabled": {"type": "bool", "description": "True=enable"},
+    },
 )
 async def toggle_channel_tool(channel: str, enabled: bool = True) -> str:
     return await _tc(channel, enabled)
 
+
 @registry.register(
     description="Add a new LLM provider (custom API endpoint). Use when user wants to add a new cloud/local provider.",
-    parameters={"name":{"type":"str","description":"Provider name"},"base_url":{"type":"str","description":"API base URL"},"api_key":{"type":"str","description":"API key"},"models":{"type":"str","description":"Comma-separated model names"}},
+    parameters={
+        "name": {"type": "str", "description": "Provider name"},
+        "base_url": {"type": "str", "description": "API base URL"},
+        "api_key": {"type": "str", "description": "API key"},
+        "models": {"type": "str", "description": "Comma-separated model names"},
+    },
 )
 async def add_provider_tool(name: str, base_url: str, api_key: str, models: str = "") -> str:
     return await _ap(name, base_url, api_key, models)
+
 
 @registry.register(
     description="Restart the agent process.",
@@ -791,6 +928,7 @@ async def add_provider_tool(name: str, base_url: str, api_key: str, models: str 
 )
 async def restart_agent_tool() -> str:
     return await _ra()
+
 
 @registry.register(
     description="Show all current configuration settings. Use when asked about current setup.",
@@ -802,11 +940,14 @@ async def show_config_tool() -> str:
 
 @registry.register(
     description="Search the company internal knowledge base (RAG) for uploaded documents, policies, or manuals.",
-    parameters={"query": {"type": "str", "description": "What to search for in the company knowledge base"}},
+    parameters={
+        "query": {"type": "str", "description": "What to search for in the company knowledge base"}
+    },
 )
 async def search_knowledge_base(query: str) -> str:
-    from memory.store import KnowledgeStore
     from llm_gateway.gateway import LLMGateway
+    from memory.store import KnowledgeStore
+
     store = KnowledgeStore()
     gateway = LLMGateway()
     docs = await store.search(query, gateway=gateway)
@@ -822,33 +963,29 @@ async def search_knowledge_base(query: str) -> str:
     description="Generate a visual chart (Bar, Line, Pie, Doughnut) for numerical data. Returns a formatted block that renders dynamically on the user dashboard.",
     parameters={
         "title": {"type": "str", "description": "Title of the chart"},
-        "chart_type": {"type": "str", "description": "Type of chart: 'bar', 'line', 'pie', 'doughnut'"},
-        "labels": {"type": "list", "description": "X-axis labels or category names (list of strings)"},
-        "data": {"type": "list", "description": "Y-axis values or numerical data (list of numbers)"},
+        "chart_type": {
+            "type": "str",
+            "description": "Type of chart: 'bar', 'line', 'pie', 'doughnut'",
+        },
+        "labels": {
+            "type": "list",
+            "description": "X-axis labels or category names (list of strings)",
+        },
+        "data": {
+            "type": "list",
+            "description": "Y-axis values or numerical data (list of numbers)",
+        },
         "label": {"type": "str", "description": "Label of the dataset (e.g. 'Revenue', 'Sales')"},
     },
 )
-def generate_chart(title: str, chart_type: str, labels: list[str], data: list[float], label: str = "Value") -> str:
+def generate_chart(
+    title: str, chart_type: str, labels: list[str], data: list[float], label: str = "Value"
+) -> str:
     import json
+
     chart_config = {
         "type": chart_type.lower(),
-        "data": {
-            "labels": labels,
-            "datasets": [{
-                "label": label,
-                "data": data
-            }]
-        },
-        "options": {
-            "responsive": True,
-            "plugins": {
-                "title": {
-                    "display": True,
-                    "text": title
-                }
-            }
-        }
+        "data": {"labels": labels, "datasets": [{"label": label, "data": data}]},
+        "options": {"responsive": True, "plugins": {"title": {"display": True, "text": title}}},
     }
     return f"Here is the chart:\n\n```json-chart\n{json.dumps(chart_config, indent=2, ensure_ascii=False)}\n```"
-
-

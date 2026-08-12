@@ -13,6 +13,7 @@ Usage:
 
 Security: SELECT-only queries against the data dictionary. No writes to the DB.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,7 +31,13 @@ SCHEMA_CONFIG_PATH = os.path.join(ROOT, "config", "accounting_schema.json")
 # ─── Logical schema keys → keywords used to auto-match real tables ─────────
 LOGICAL_TABLES: dict[str, list[str]] = {
     "sales_invoices": ["sales_invoice", "sale_invoice", "invoice", "sales"],
-    "purchase_invoices": ["purchase_invoice", "purchase", "vendor_invoice", "po_invoice", "grn_invoice"],
+    "purchase_invoices": [
+        "purchase_invoice",
+        "purchase",
+        "vendor_invoice",
+        "po_invoice",
+        "grn_invoice",
+    ],
     "customers": ["customer", "client", "debtor"],
     "vendors": ["vendor", "supplier", "creditor"],
     "accounts": ["account", "chart", "coa"],
@@ -107,20 +114,27 @@ def discover_tables(engine, owner: str | None) -> list[tuple[str, str]]:
     with engine.connect() as conn:
         if d == "oracle":
             if owner:
-                rows = conn.execute(text(
-                    "SELECT table_name, 'TABLE' FROM all_tables WHERE owner = :o "
-                    "AND table_name NOT LIKE 'BIN$%' ORDER BY table_name"
-                ), {"o": owner}).all()
+                rows = conn.execute(
+                    text(
+                        "SELECT table_name, 'TABLE' FROM all_tables WHERE owner = :o "
+                        "AND table_name NOT LIKE 'BIN$%' ORDER BY table_name"
+                    ),
+                    {"o": owner},
+                ).all()
             else:
-                rows = conn.execute(text(
-                    "SELECT table_name, 'TABLE' FROM user_tables "
-                    "WHERE table_name NOT LIKE 'BIN$%' ORDER BY table_name"
-                )).all()
+                rows = conn.execute(
+                    text(
+                        "SELECT table_name, 'TABLE' FROM user_tables "
+                        "WHERE table_name NOT LIKE 'BIN$%' ORDER BY table_name"
+                    )
+                ).all()
         else:  # sql server / mssql / generic
-            rows = conn.execute(text(
-                "SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES "
-                "WHERE TABLE_NAME NOT LIKE 'sys%' ORDER BY TABLE_NAME"
-            )).all()
+            rows = conn.execute(
+                text(
+                    "SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES "
+                    "WHERE TABLE_NAME NOT LIKE 'sys%' ORDER BY TABLE_NAME"
+                )
+            ).all()
     return [(str(r[0]), str(r[1])) for r in rows]
 
 
@@ -131,20 +145,29 @@ def discover_columns(engine, table: str, owner: str | None) -> list[str]:
     with engine.connect() as conn:
         if d == "oracle":
             if owner:
-                rows = conn.execute(text(
-                    "SELECT column_name FROM all_tab_columns WHERE owner = :o "
-                    "AND table_name = :t ORDER BY column_id"
-                ), {"o": owner, "t": table}).all()
+                rows = conn.execute(
+                    text(
+                        "SELECT column_name FROM all_tab_columns WHERE owner = :o "
+                        "AND table_name = :t ORDER BY column_id"
+                    ),
+                    {"o": owner, "t": table},
+                ).all()
             else:
-                rows = conn.execute(text(
-                    "SELECT column_name FROM user_tab_columns "
-                    "WHERE table_name = :t ORDER BY column_id"
-                ), {"t": table}).all()
+                rows = conn.execute(
+                    text(
+                        "SELECT column_name FROM user_tab_columns "
+                        "WHERE table_name = :t ORDER BY column_id"
+                    ),
+                    {"t": table},
+                ).all()
         else:
-            rows = conn.execute(text(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-                "WHERE TABLE_NAME = :t ORDER BY ORDINAL_POSITION"
-            ), {"t": table}).all()
+            rows = conn.execute(
+                text(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_NAME = :t ORDER BY ORDINAL_POSITION"
+                ),
+                {"t": table},
+            ).all()
     return [str(r[0]) for r in rows]
 
 
@@ -167,7 +190,9 @@ def match_tables(discovered: list[tuple[str, str]]) -> dict[str, str]:
     return matched
 
 
-def match_columns(real_table: str, discovered_cols: list[str], engine, owner: str | None) -> dict[str, str]:
+def match_columns(
+    real_table: str, discovered_cols: list[str], engine, owner: str | None
+) -> dict[str, str]:
     """Match discovered columns to logical column keys. Returns {logical_col: real_col}."""
     result: dict[str, str] = {}
     taken: set[str] = set()
@@ -221,8 +246,9 @@ def save_config(config: dict) -> None:
     print(f"\n  ✅ Config saved to {SCHEMA_CONFIG_PATH}")
 
 
-def update_db_entry(config: dict, db_key: str, name: str, db_url: str,
-                    mapping: dict[str, dict[str, Any]]) -> None:
+def update_db_entry(
+    config: dict, db_key: str, name: str, db_url: str, mapping: dict[str, dict[str, Any]]
+) -> None:
     entry = config.setdefault("databases", {}).setdefault(db_key, {})
     entry["name"] = name
     entry["db_url"] = db_url
@@ -234,14 +260,24 @@ def update_db_entry(config: dict, db_key: str, name: str, db_url: str,
 # ─── Main ──────────────────────────────────────────────────────────────────
 def main() -> None:
     parser = argparse.ArgumentParser(description="Discover accounting DB schema (Onyx Pro)")
-    parser.add_argument("--db-url", help="SQLAlchemy URL (oracle+oracledb://user:pwd@host:1521/?service_name=ORCL)")
+    parser.add_argument(
+        "--db-url", help="SQLAlchemy URL (oracle+oracledb://user:pwd@host:1521/?service_name=ORCL)"
+    )
     parser.add_argument("--owner", help="Oracle schema owner (e.g. ONYX). Default: current user")
-    parser.add_argument("--db-key", default="onyx", help="Key for the database entry in the config (default: onyx)")
+    parser.add_argument(
+        "--db-key", default="onyx", help="Key for the database entry in the config (default: onyx)"
+    )
     parser.add_argument("--name", default="Onyx Pro", help="Display name for the database entry")
-    parser.add_argument("--list-only", action="store_true", help="Only list tables, do not write config")
+    parser.add_argument(
+        "--list-only", action="store_true", help="Only list tables, do not write config"
+    )
     args = parser.parse_args()
 
-    db_url = args.db_url or os.getenv("ACCOUNTING_DB_URL") or input("Database URL (oracle+oracledb://...): ").strip()
+    db_url = (
+        args.db_url
+        or os.getenv("ACCOUNTING_DB_URL")
+        or input("Database URL (oracle+oracledb://...): ").strip()
+    )
     if not db_url:
         raise SystemExit("No database URL provided.")
 
@@ -250,14 +286,15 @@ def main() -> None:
 
     # Test connection
     from sqlalchemy import text
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         print("  ✅ Connection OK")
     except Exception as e:
-        raise SystemExit(f"  ❌ Connection failed: {e}")
+        raise SystemExit(f"  ❌ Connection failed: {e}") from e
 
-    print(f"  Discovering tables...")
+    print("  Discovering tables...")
     mapping = build_schema_mapping(engine, args.owner)
 
     if args.list_only:

@@ -4,6 +4,7 @@ Admin Settings Tools - Agent can modify its own configuration.
 The agent can change models, language, persona, tools, channels,
 add providers, schedule tasks, and restart itself.
 """
+
 from __future__ import annotations
 
 import json
@@ -126,8 +127,7 @@ async def toggle_channel(channel: str, enabled: bool = True) -> str:
         return f"❌ Error: {e}"
 
 
-async def add_provider(name: str, base_url: str, api_key: str,
-                       models: str = "") -> str:
+async def add_provider(name: str, base_url: str, api_key: str, models: str = "") -> str:
     try:
         env = _read_env()
         pkey = f"PROVIDER_{name.upper()}_BASE_URL"
@@ -191,7 +191,7 @@ async def show_current_config() -> str:
             for key, val in dbs.items():
                 lines.append(f"   • {val.get('name', key)}")
 
-        lines.append(f"\n🔑 API Keys:")
+        lines.append("\n🔑 API Keys:")
         for k, v in env.items():
             if "API_KEY" in k and v:
                 masked = v[:4] + "..." if len(v) > 8 else "***"

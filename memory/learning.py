@@ -4,14 +4,13 @@ Agent Learning Module — Self-Improving Agent
 Learns communication style, user preferences, and successful patterns
 from past conversations. Gets smarter with every interaction.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import re as _re
 from collections import Counter
-from pathlib import Path
-
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEARNING_FILE = os.path.join(ROOT, "data", "learning.json")
@@ -55,16 +54,26 @@ class AgentLearner:
         with open(LEARNING_FILE, "w", encoding="utf-8") as f:
             json.dump(self.data, f, ensure_ascii=False, indent=2)
 
-    def learn_from_exchange(self, user_message: str, assistant_response: str,
-                            tools_used: list[str] = None, session_lang: str = "ar"):
+    def learn_from_exchange(
+        self,
+        user_message: str,
+        assistant_response: str,
+        tools_used: list[str] = None,
+        session_lang: str = "ar",
+    ):
         """Learn from a conversation exchange."""
         tools_used = tools_used or []
         self.data["conversation_count"] += 1
         self.data["total_messages"] += 2
 
         # 1. Detect language preference
-        lang = session_lang if session_lang in ("ar", "en") else \
-            "ar" if _re.search(r"[\u0600-\u06FF]", user_message) else "en"
+        lang = (
+            session_lang
+            if session_lang in ("ar", "en")
+            else "ar"
+            if _re.search(r"[\u0600-\u06FF]", user_message)
+            else "en"
+        )
         self.data["user_profile"]["preferred_language"] = lang
 
         # 2. Learn response length preference
@@ -106,7 +115,8 @@ class AgentLearner:
                 questions[idx]["count"] += 1
             # Keep top 20
             self.data["user_profile"]["common_questions"] = sorted(
-                questions, key=lambda x: x["count"], reverse=True)[:20]
+                questions, key=lambda x: x["count"], reverse=True
+            )[:20]
 
         # 6. Detect emoji usage
         if _re.search(r"[\U0001F300-\U0001F9FF]", user_message + assistant_response):
@@ -143,7 +153,9 @@ class AgentLearner:
         lines = []
 
         lines.append(f"User language preference: {p['preferred_language']}")
-        lines.append(f"User communication style: {p['formality']}, prefer {p['response_length']} answers")
+        lines.append(
+            f"User communication style: {p['formality']}, prefer {p['response_length']} answers"
+        )
 
         if p["top_topics"]:
             top = ", ".join(t["topic"] for t in p["top_topics"][:5])
@@ -182,7 +194,16 @@ class AgentLearner:
     def _extract_topics(self, text: str) -> list[str]:
         """Extract topics/keywords from user message."""
         keywords = {
-            "accounting": ["مبيعات", "فاتورة", "محاسبة", "أرباح", "رصيد", "sales", "invoice", "revenue"],
+            "accounting": [
+                "مبيعات",
+                "فاتورة",
+                "محاسبة",
+                "أرباح",
+                "رصيد",
+                "sales",
+                "invoice",
+                "revenue",
+            ],
             "weather": ["طقس", "الطقس", "جو", "weather", "temperature"],
             "currency": ["دولار", "ريال", "سعر", "عملة", "currency", "usd", "sar", "exchange"],
             "stocks": ["سهم", "سوق", "تداول", "stock", "tadawul"],
@@ -205,7 +226,9 @@ class AgentLearner:
         query_lower = query.lower()
         if any(w in query_lower for w in ["طقس", "weather", "جو"]):
             return "weather"
-        if any(w in query_lower for w in ["دولار", "ريال", "سعر", "عملة", "currency", "usd", "sar"]):
+        if any(
+            w in query_lower for w in ["دولار", "ريال", "سعر", "عملة", "currency", "usd", "sar"]
+        ):
             return "currency"
         if any(w in query_lower for w in ["مبيع", "فاتورة", "sales", "invoice", "أرباح"]):
             return "accounting"

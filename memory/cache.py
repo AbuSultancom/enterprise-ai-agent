@@ -12,6 +12,7 @@ Usage:
     async def get_weather(city: str) -> str:
         ...
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +21,8 @@ import hashlib
 import json
 import time
 from collections import OrderedDict
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class LRUCache:
@@ -34,7 +36,9 @@ class LRUCache:
     def __init__(self, maxsize: int = 512, default_ttl: float = 300):
         self._maxsize = maxsize
         self._default_ttl = default_ttl
-        self._store: OrderedDict[str, tuple[Any, float]] = OrderedDict()  # key → (value, expires_at)
+        self._store: OrderedDict[str, tuple[Any, float]] = (
+            OrderedDict()
+        )  # key → (value, expires_at)
         self._hits = 0
         self._misses = 0
 
@@ -142,6 +146,7 @@ class LRUCache:
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_key(prefix: str, args: tuple, kwargs: dict) -> str:
     """Stable cache key from function name + arguments."""

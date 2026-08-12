@@ -20,9 +20,11 @@ Does EVERYTHING in one go:
 
 Press Ctrl+C to stop everything.
 """
+
 from __future__ import annotations
 
 import sys
+
 # Configure console output to support UTF-8 on Windows
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -47,9 +49,15 @@ VERSION = "0.5.0"
 
 # ── Color palette ──
 PALETTE = {
-    "g": "\033[92m", "y": "\033[93m", "b": "\033[94m",
-    "c": "\033[96m", "r": "\033[91m", "m": "\033[95m",
-    "w": "\033[97m", "bold": "\033[1m", "dim": "\033[2m",
+    "g": "\033[92m",
+    "y": "\033[93m",
+    "b": "\033[94m",
+    "c": "\033[96m",
+    "r": "\033[91m",
+    "m": "\033[95m",
+    "w": "\033[97m",
+    "bold": "\033[1m",
+    "dim": "\033[2m",
     "reset": "\033[0m",
 }
 
@@ -141,7 +149,9 @@ def show_tip() -> None:
 # ── Banner ──
 def banner() -> None:
     # Gradient top border
-    print(c("""
+    print(
+        c(
+            """
   ╔═══════════════════════════════════════════════════════╗
   ║     ███████╗███╗   ██╗████████╗███████╗██████╗       ║
   ║     ██╔════╝████╗  ██║╚══██╔══╝██╔════╝██╔══██╗      ║
@@ -157,8 +167,12 @@ def banner() -> None:
   ║          ██║  ██║██║    ██║  ██║╚██████╔╝███████╗██║ ╚███║   ██║     ║
   ║          ╚═╝  ╚═╝╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚══╝   ╚═╝     ║
   ╚═══════════════════════════════════════════════════════╝
-""", "c", "bold"))
-    print(c(f"              🚀  Enterprise AI Agent Platform  🚀", "bold"))
+""",
+            "c",
+            "bold",
+        )
+    )
+    print(c("              🚀  Enterprise AI Agent Platform  🚀", "bold"))
     print(c(f"                     v{VERSION}  ·  Ready", "dim"))
     print()
 
@@ -221,7 +235,7 @@ def system_checks_table(checks: list[tuple[str, bool, str]]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Enterprise AI Agent — One-Command Launcher",
-        epilog="Example: python start.py --port=8080 --no-whatsapp"
+        epilog="Example: python start.py --port=8080 --no-whatsapp",
     )
     parser.add_argument("--port", type=int, default=8000, help="API port (default: 8000)")
     parser.add_argument("--no-whatsapp", action="store_true", help="Skip WhatsApp bridge")
@@ -235,17 +249,17 @@ def parse_args() -> argparse.Namespace:
 # ── Checks ──
 def check_python() -> tuple[bool, str]:
     ver = f"{sys.version_info[0]}.{sys.version_info[1]}"
-    if sys.version_info < (3, 11):
-        fail(f"Python ≥ 3.11 required (you have {ver})")
-        return False, ver
     return True, ver
 
 
 def check_venv() -> tuple[bool, str]:
-    in_venv = (hasattr(sys, "real_prefix") or
-               (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
+    in_venv = hasattr(sys, "real_prefix") or (
+        hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+    )
     if not in_venv:
-        warn("Virtual environment not active — recommended: python -m venv venv && source venv/bin/activate")
+        warn(
+            "Virtual environment not active — recommended: python -m venv venv && source venv/bin/activate"
+        )
         return False, "inactive"
     return True, "active"
 
@@ -263,9 +277,17 @@ def check_deps(auto_install: bool = True) -> tuple[bool, str]:
             info(f"Missing: {', '.join(missing)}")
             try:
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", "-r",
-                     os.path.join(ROOT, "requirements.txt")],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "-r",
+                        os.path.join(ROOT, "requirements.txt"),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 ok("Dependencies installed")
                 return True, "installed"
             except Exception:
@@ -279,6 +301,7 @@ def check_deps(auto_install: bool = True) -> tuple[bool, str]:
 def check_internet() -> tuple[bool, str]:
     """Quick internet connectivity check."""
     import urllib.request as _urllib
+
     try:
         _urllib.urlopen("https://www.google.com", timeout=3)
         return True, "connected"
@@ -330,6 +353,7 @@ def count_conversations() -> int:
     if os.path.exists(conversations_file):
         try:
             import json
+
             with open(conversations_file, encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
@@ -393,6 +417,7 @@ def check_update() -> None:
     """Check GitHub for newer version."""
     import json as _json
     import urllib.request as _urllib
+
     try:
         req = _urllib.Request(
             "https://api.github.com/repos/AbuSultancom/enterprise-ai-agent/releases/latest",
@@ -402,15 +427,15 @@ def check_update() -> None:
             data = _json.loads(r.read())
         latest = data.get("tag_name", "").lstrip("v")
         if latest and latest > VERSION:
-            print(c(f"\n  ╔══ 🚀  UPDATE AVAILABLE ══╗", "m", "bold"))
+            print(c("\n  ╔══ 🚀  UPDATE AVAILABLE ══╗", "m", "bold"))
             print(c(f"  ║  Current: v{VERSION}", "dim"))
             print(c(f"  ║  Latest:  v{latest}", "g"))
             print(c(f"  ║  {data.get('html_url', '')}", "c", "dim"))
-            print(c(f"  ╚════════════════════╝", "m"))
+            print(c("  ╚════════════════════╝", "m"))
             print()
-            print(c(f"  Run this command to update:", "y"))
-            print(c(f"    git pull origin main", "c", "bold"))
-            print(c(f"    pip install -r requirements.txt", "c", "bold"))
+            print(c("  Run this command to update:", "y"))
+            print(c("    git pull origin main", "c", "bold"))
+            print(c("    pip install -r requirements.txt", "c", "bold"))
             print()
     except Exception:
         pass
@@ -419,9 +444,10 @@ def check_update() -> None:
 def wait_for_api(port: int, timeout: int = 20) -> bool:
     """Wait until the API health endpoint responds."""
     import http.client
+
     url = f"localhost:{port}"
     spin(f"Waiting for API on port {port}...")
-    for i in range(timeout):
+    for _ in range(timeout):
         try:
             conn = http.client.HTTPConnection(url, timeout=2)
             conn.request("GET", "/health")
@@ -437,11 +463,12 @@ def wait_for_api(port: int, timeout: int = 20) -> bool:
 
 
 # ── Box drawing helper ──
-def print_box(title: str, items: list[tuple[str, str]], color: str = "g", title_emoji: str = "✅") -> None:
+def print_box(
+    title: str, items: list[tuple[str, str]], color: str = "g", title_emoji: str = "✅"
+) -> None:
     """Print a bordered box with title and key-value items."""
     width = 56
     top = "╔" + "═" * (width - 2) + "╗"
-    mid = "║" + " " * (width - 2) + "║"
     bot = "╚" + "═" * (width - 2) + "╝"
 
     print()
@@ -528,11 +555,7 @@ def main() -> None:
     # ═══════════════════════════════════════════
     #  PHASE 4: WhatsApp
     # ═══════════════════════════════════════════
-    whatsapp_on = (
-        not args.no_whatsapp
-        and env.get("WHATSAPP_ENABLED", "true") == "true"
-        and node_ok
-    )
+    whatsapp_on = not args.no_whatsapp and env.get("WHATSAPP_ENABLED", "true") == "true" and node_ok
     if whatsapp_on and npm_ok:
         ensure_node_deps(npm_detail)
 
@@ -542,12 +565,16 @@ def main() -> None:
     env.setdefault("MEMORY_DB_PATH", os.path.join(ROOT, "data", "knowledge.json"))
     env.setdefault("AUDIT_LOG_PATH", os.path.join(ROOT, "data", "audit.jsonl"))
     env.setdefault("SETTINGS_PATH", os.path.join(ROOT, "config", "settings.json"))
-    env.setdefault("API_KEYS",
-                   f"admin:{env.get('ADMIN_KEY', 'dev-admin-key')},user:{env.get('USER_KEY', 'dev-user-key')}")
+    env.setdefault(
+        "API_KEYS",
+        f"admin:{env.get('ADMIN_KEY', 'dev-admin-key')},user:{env.get('USER_KEY', 'dev-user-key')}",
+    )
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
 
     port = args.port
-    children: list[tuple[subprocess.Popen, str]] = []  # (proc, cwd) — cwd needed for correct restarts
+    children: list[
+        tuple[subprocess.Popen, str]
+    ] = []  # (proc, cwd) — cwd needed for correct restarts
 
     def shutdown(*_):
         print()
@@ -576,8 +603,8 @@ def main() -> None:
     if args.dev:
         uvicorn_args.append("--reload")
     agent = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "api.main:app"] + uvicorn_args,
-        cwd=ROOT, env=env)
+        [sys.executable, "-m", "uvicorn", "api.main:app"] + uvicorn_args, cwd=ROOT, env=env
+    )
     children.append((agent, ROOT))
 
     # Wait for API
@@ -596,7 +623,9 @@ def main() -> None:
         wa_env = dict(env)
         wa_env.setdefault("AGENT_URL", f"http://localhost:{port}")
         wa_env.setdefault("WHATSAPP_PORT", "3001")
-        wa = subprocess.Popen([node_cmd_path, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env)
+        wa = subprocess.Popen(
+            [node_cmd_path, "index.js"], cwd=os.path.join(ROOT, "whatsapp"), env=wa_env
+        )
         children.append((wa, os.path.join(ROOT, "whatsapp")))
 
     # Start Telegram
@@ -606,12 +635,12 @@ def main() -> None:
         and bool(env.get("TELEGRAM_BOT_TOKEN"))
     )
     if telegram_on:
-        info(f"Starting Telegram Bridge...")
+        info("Starting Telegram Bridge...")
         tg_env = dict(env)
         tg_env.setdefault("AGENT_URL", f"http://localhost:{port}")
         tg = subprocess.Popen(
-            [sys.executable, os.path.join(ROOT, "telegram", "bridge.py")],
-            cwd=ROOT, env=tg_env)
+            [sys.executable, os.path.join(ROOT, "telegram", "bridge.py")], cwd=ROOT, env=tg_env
+        )
         children.append((tg, ROOT))
 
     # ═══════════════════════════════════════════
@@ -631,7 +660,7 @@ def main() -> None:
 
     print_box("ALL SYSTEMS GO", summary_items, "g", "🚀")
 
-    print(c(f"    Press Ctrl+C to stop everything", "dim"))
+    print(c("    Press Ctrl+C to stop everything", "dim"))
     print()
 
     if not args.no_browser:

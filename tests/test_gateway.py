@@ -1,4 +1,5 @@
 """Tests for LLM gateway: providers, retry, PII masking, fallback."""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,8 +21,8 @@ from llm_gateway.gateway import (
     _retry,
 )
 
-
 # ─── PII Masker ───────────────────────────────────────────────────────────────
+
 
 class TestPIIMaskerExtended:
     """Extended PII masking tests."""
@@ -56,6 +57,7 @@ class TestPIIMaskerExtended:
 
 # ─── Retry helper ────────────────────────────────────────────────────────────
 
+
 class TestRetryHelper:
     """Tests for _retry exponential backoff."""
 
@@ -73,6 +75,7 @@ class TestRetryHelper:
 
     def test_retries_on_network_error(self):
         import httpx
+
         calls = 0
 
         async def fn():
@@ -98,6 +101,7 @@ class TestRetryHelper:
 
 # ─── LLMGateway provider selection ──────────────────────────────────────────
 
+
 class TestGatewayProviderRouting:
     """Test that gateway routes to the correct provider by model prefix."""
 
@@ -105,46 +109,59 @@ class TestGatewayProviderRouting:
         gw = LLMGateway()
         mock_resp = LLMResponse(content="hello", model="qwen2.5:7b", provider="ollama")
         with patch.object(gw.providers["ollama"], "chat", new=AsyncMock(return_value=mock_resp)):
-            result = asyncio.run(gw.chat([Message("user", "hi")], model="ollama:qwen2.5:7b", mask_pii=False))
+            result = asyncio.run(
+                gw.chat([Message("user", "hi")], model="ollama:qwen2.5:7b", mask_pii=False)
+            )
         assert result.provider == "ollama"
 
     def test_routes_to_openai(self):
         gw = LLMGateway()
         mock_resp = LLMResponse(content="hello", model="gpt-4o-mini", provider="openai")
         with patch.object(gw.providers["openai"], "chat", new=AsyncMock(return_value=mock_resp)):
-            result = asyncio.run(gw.chat([Message("user", "hi")], model="openai:gpt-4o-mini", mask_pii=False))
+            result = asyncio.run(
+                gw.chat([Message("user", "hi")], model="openai:gpt-4o-mini", mask_pii=False)
+            )
         assert result.provider == "openai"
 
     def test_routes_to_anthropic(self):
         gw = LLMGateway()
         mock_resp = LLMResponse(content="hello", model="claude-3-haiku", provider="anthropic")
         with patch.object(gw.providers["anthropic"], "chat", new=AsyncMock(return_value=mock_resp)):
-            result = asyncio.run(gw.chat(
-                [Message("user", "hi")], model="anthropic:claude-3-haiku", mask_pii=False
-            ))
+            result = asyncio.run(
+                gw.chat([Message("user", "hi")], model="anthropic:claude-3-haiku", mask_pii=False)
+            )
         assert result.provider == "anthropic"
 
     def test_routes_to_gemini(self):
         gw = LLMGateway()
         mock_resp = LLMResponse(content="hello", model="gemini-2.0-flash", provider="gemini")
         with patch.object(gw.providers["gemini"], "chat", new=AsyncMock(return_value=mock_resp)):
-            result = asyncio.run(gw.chat(
-                [Message("user", "hi")], model="gemini:gemini-2.0-flash", mask_pii=False
-            ))
+            result = asyncio.run(
+                gw.chat([Message("user", "hi")], model="gemini:gemini-2.0-flash", mask_pii=False)
+            )
         assert result.provider == "gemini"
 
     def test_fallback_on_primary_failure(self):
         import httpx
+
         gw = LLMGateway()
         openai_resp = LLMResponse(content="fallback", model="gpt-4o-mini", provider="openai")
 
         async def run():
             with (
-                patch.object(gw.providers["ollama"], "chat", new=AsyncMock(side_effect=httpx.NetworkError("down"))),
-                patch.object(gw.providers["openai"], "chat", new=AsyncMock(return_value=openai_resp)),
+                patch.object(
+                    gw.providers["ollama"],
+                    "chat",
+                    new=AsyncMock(side_effect=httpx.NetworkError("down")),
+                ),
+                patch.object(
+                    gw.providers["openai"], "chat", new=AsyncMock(return_value=openai_resp)
+                ),
                 patch.object(gw.providers["openai"], "api_key", "sk-fake"),
             ):
-                return await gw.chat([Message("user", "hi")], model="ollama:qwen2.5:7b", mask_pii=False)
+                return await gw.chat(
+                    [Message("user", "hi")], model="ollama:qwen2.5:7b", mask_pii=False
+                )
 
         result = asyncio.run(run())
         assert result.provider == "openai"
@@ -169,6 +186,7 @@ class TestGatewayProviderRouting:
 
 
 # ─── Health check ────────────────────────────────────────────────────────────
+
 
 class TestGatewayHealth:
     """Test gateway health() method."""

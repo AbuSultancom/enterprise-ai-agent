@@ -4,6 +4,7 @@ This file is intentionally thin: it wires together routers, middleware,
 singletons, and the dashboard static files. All business logic lives in
 the routers under api/routers/.
 """
+
 from __future__ import annotations
 
 import os
@@ -14,10 +15,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 import config_loader
-import tools.builtin          # noqa: F401 — registers built-in tools
-import tools.accounting       # noqa: F401 — registers accounting/ERP tools
-import tools.communication    # noqa: F401 — registers communication tools
-import tools.voice            # noqa: F401 — registers voice tools
+import tools.accounting  # noqa: F401 — registers accounting/ERP tools
+import tools.builtin  # noqa: F401 — registers built-in tools
+import tools.communication  # noqa: F401 — registers communication tools
+import tools.voice  # noqa: F401 — registers voice tools
 from api.middleware import register_middleware
 from connectors.accounting import connector as accounting_db
 from llm_gateway.gateway import LLMGateway
@@ -27,6 +28,7 @@ from scheduler.engine import scheduler_engine
 from tools.registry import registry
 
 # ─── Load .env ───────────────────────────────────────────────────────────────
+
 
 def _load_dotenv() -> None:
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -55,6 +57,7 @@ store = KnowledgeStore()
 conv_store = get_conv_store()
 
 # ─── Lifespan (startup / shutdown) ──────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -86,8 +89,8 @@ register_middleware(app)
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 
-from api.routers import chat, conversations, knowledge, accounting, admin  # noqa: E402
-from api.routers import scheduler as scheduler_router                       # noqa: E402
+from api.routers import accounting, admin, chat, conversations, knowledge  # noqa: E402
+from api.routers import scheduler as scheduler_router  # noqa: E402
 
 # Inject shared singletons into each router module
 chat.init(gateway, store, conv_store)
@@ -105,6 +108,7 @@ app.include_router(scheduler_router.router)
 
 # ─── Health endpoint ─────────────────────────────────────────────────────────
 
+
 @app.get("/health", tags=["System"])
 async def health():
     db_path = os.path.join(
@@ -113,7 +117,10 @@ async def health():
     uptime = "unknown"
     if os.path.exists(db_path):
         import datetime
-        uptime = str(datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(db_path)))
+
+        uptime = str(
+            datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(db_path))
+        )
 
     tools_list = [{"name": t.name, "description": t.description} for t in registry.list()]
     acc_status = accounting_db.test_connection() if accounting_db.available else None

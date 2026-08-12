@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from agent_core.agent import Agent
 from llm_gateway.gateway import LLMGateway
-from tools.registry import ToolRegistry, registry as main_registry
+from tools.registry import ToolRegistry
+from tools.registry import registry as main_registry
 
 # ── Tool subsets for each specialized sub-agent ─────────────────────
 
@@ -80,29 +81,120 @@ def _get_sub_registry(key: str, tool_names: set[str]) -> ToolRegistry:
         _SUB_REGISTRIES[key] = _build_sub_registry(tool_names)
     return _SUB_REGISTRIES[key]
 
+
 # ── Keyword-based routing rules ─────────────────────────────────────
 # Order matters: first match wins. More specific / longer phrases first.
 _ROUTING_RULES: list[tuple[list[str], str]] = [
     # Report — generating, listing, or saving reports (check first)
-    (["generate report", "save report", "list report", "report generation",
-      "create report", "write report", "make report",
-      "report", "تقرير", "تقارير", "سوي", "انشئ", "اعمل"], "report"),
+    (
+        [
+            "generate report",
+            "save report",
+            "list report",
+            "report generation",
+            "create report",
+            "write report",
+            "make report",
+            "report",
+            "تقرير",
+            "تقارير",
+            "سوي",
+            "انشئ",
+            "اعمل",
+        ],
+        "report",
+    ),
     # Knowledge — searching policies, manuals, docs, or knowledge base
-    (["policy", "manual", "guide", "procedure", "document", "knowledge base", "rag",
-      "files", "search docs", "سياسة", "شروط", "ملف", "دليل", "مستند", "مستندات", "موسوعة"], "knowledge"),
+    (
+        [
+            "policy",
+            "manual",
+            "guide",
+            "procedure",
+            "document",
+            "knowledge base",
+            "rag",
+            "files",
+            "search docs",
+            "سياسة",
+            "شروط",
+            "ملف",
+            "دليل",
+            "مستند",
+            "مستندات",
+            "موسوعة",
+        ],
+        "knowledge",
+    ),
     # WebSearch — anything about searching the web, weather, currency
-    (["web search", "look up online", "find online", "search online",
-      "exchange rate", "currency rate",
-      "weather", "web", "search", "news", "google", "internet",
-      "find", "بحث", "ابحث", "طقس", "الطقس", "درجة الحرارة",
-      "سعر", "صرف", "دولار", "ريال", "عملة", "يورو"], "websearch"),
+    (
+        [
+            "web search",
+            "look up online",
+            "find online",
+            "search online",
+            "exchange rate",
+            "currency rate",
+            "weather",
+            "web",
+            "search",
+            "news",
+            "google",
+            "internet",
+            "find",
+            "بحث",
+            "ابحث",
+            "طقس",
+            "الطقس",
+            "درجة الحرارة",
+            "سعر",
+            "صرف",
+            "دولار",
+            "ريال",
+            "عملة",
+            "يورو",
+        ],
+        "websearch",
+    ),
     # Accounting — financial & ERP queries
-    (["invoice", "sales", "revenue", "expense", "accounting", "financial",
-      "profit", "customer", "vendor", "balance", "cash", "database",
-      "accounting database", "sales summary", "top customer",
-      "sell", "sold", "expenses summary", "paid", "payment",
-      "مبيعات", "فاتورة", "محاسبة", "حساب", "رصيد", "إيراد", "مصروف",
-      "عميل", "مورد", "أرباح", "إجمالي", "ضريبة", "كشف"], "accounting"),
+    (
+        [
+            "invoice",
+            "sales",
+            "revenue",
+            "expense",
+            "accounting",
+            "financial",
+            "profit",
+            "customer",
+            "vendor",
+            "balance",
+            "cash",
+            "database",
+            "accounting database",
+            "sales summary",
+            "top customer",
+            "sell",
+            "sold",
+            "expenses summary",
+            "paid",
+            "payment",
+            "مبيعات",
+            "فاتورة",
+            "محاسبة",
+            "حساب",
+            "رصيد",
+            "إيراد",
+            "مصروف",
+            "عميل",
+            "مورد",
+            "أرباح",
+            "إجمالي",
+            "ضريبة",
+            "كشف",
+        ],
+        "accounting",
+    ),
 ]
 
 
@@ -120,6 +212,7 @@ def route_request(user_input: str) -> str:
 
 
 # ── Orchestrator ────────────────────────────────────────────────────
+
 
 class OrchestratorAgent:
     """Routes user requests to specialized sub-agents and composes the final answer.
@@ -145,8 +238,9 @@ class OrchestratorAgent:
             "general": Agent(gateway, main_registry, max_steps),
         }
 
-    async def run(self, user_input: str, model: str | None = None,
-                  history: list | None = None) -> dict:
+    async def run(
+        self, user_input: str, model: str | None = None, history: list | None = None
+    ) -> dict:
         """Route the request to the best sub-agent and return its response."""
         target = route_request(user_input)
         agent = self._sub_agents.get(target, self._sub_agents["general"])
@@ -156,9 +250,13 @@ class OrchestratorAgent:
         except Exception as e:
             return {
                 "answer": f"Orchestrator error ({target} agent): {e}",
-                "steps": [{"tool": "_orchestrator_delegate",
-                           "arguments": {"target": target},
-                           "observation": f"Sub-agent '{target}' raised: {e}"}],
+                "steps": [
+                    {
+                        "tool": "_orchestrator_delegate",
+                        "arguments": {"target": target},
+                        "observation": f"Sub-agent '{target}' raised: {e}",
+                    }
+                ],
                 "routed_to": target,
                 "model": None,
                 "provider": None,
@@ -167,8 +265,9 @@ class OrchestratorAgent:
         result["routed_to"] = target
         return result
 
-    async def run_stream(self, user_input: str, model: str | None = None,
-                         history: list | None = None):
+    async def run_stream(
+        self, user_input: str, model: str | None = None, history: list | None = None
+    ):
         """Streaming version — yields a 'routed' event first, then sub-agent events."""
         target = route_request(user_input)
         agent = self._sub_agents.get(target, self._sub_agents["general"])

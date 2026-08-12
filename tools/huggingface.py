@@ -15,8 +15,8 @@ from .registry import registry
 HF_API_BASE = "https://api-inference.huggingface.co/models"
 
 # Model names
-MODEL_AR_EN = "Helsinki-NLP/opus-mt-ar-en"   # Arabic → English
-MODEL_EN_AR = "Helsinki-NLP/opus-mt-en-ar"   # English → Arabic
+MODEL_AR_EN = "Helsinki-NLP/opus-mt-ar-en"  # Arabic → English
+MODEL_EN_AR = "Helsinki-NLP/opus-mt-en-ar"  # English → Arabic
 MODEL_SUMMARIZE = "facebook/bart-large-cnn"
 MODEL_SENTIMENT = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
@@ -41,6 +41,7 @@ def _detect_arabic(text: str) -> bool:
 
 # ─── translate_text ────────────────────────────────────────────────
 
+
 @registry.register(
     description=(
         "Translate text between Arabic and English. Auto-detects direction; "
@@ -51,7 +52,7 @@ def _detect_arabic(text: str) -> bool:
         "source_lang": {
             "type": "str",
             "description": "Source language: 'ar' (Arabic) or 'en' (English). "
-                           "Leave empty for auto-detect.",
+            "Leave empty for auto-detect.",
             "default": "",
         },
     },
@@ -114,6 +115,7 @@ async def translate_text(text: str, source_lang: str = "") -> str:
 
 # ─── summarize_text ─────────────────────────────────────────────────
 
+
 @registry.register(
     description="Summarize long text into a concise paragraph using BART.",
     parameters={
@@ -130,9 +132,7 @@ async def translate_text(text: str, source_lang: str = "") -> str:
         },
     },
 )
-async def summarize_text(
-    text: str, max_length: float = 130, min_length: float = 30
-) -> str:
+async def summarize_text(text: str, max_length: float = 130, min_length: float = 30) -> str:
     """Summarize long text using facebook/bart-large-cnn.
 
     Args:
@@ -281,6 +281,8 @@ async def analyze_sentiment(text: str) -> str:
         return "\n".join(lines)
 
     except httpx.HTTPStatusError as e:
-        return f"⚠️ Sentiment analysis failed (HTTP {e.response.status_code}): {e.response.text[:300]}"
+        return (
+            f"⚠️ Sentiment analysis failed (HTTP {e.response.status_code}): {e.response.text[:300]}"
+        )
     except Exception as e:
         return f"⚠️ Sentiment analysis error: {e}"

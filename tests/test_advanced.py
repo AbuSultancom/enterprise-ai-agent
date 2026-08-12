@@ -1,17 +1,16 @@
 """Advanced unit and integration tests for Enterprise AI Agent enhancements."""
+
 from __future__ import annotations
 
-import sys
-import os
-import pytest
 import asyncio
+import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from llm_gateway.gateway import PIIMasker, Message
-from agent_core.security import SecurityManager, UserContext, Role
-from agent_core.audit import AuditLogger, AUDIT_FILE
-from memory.vector_rag import HybridRAGSearch, DocumentChunk
+from agent_core.security import Role, SecurityManager, UserContext
+from llm_gateway.gateway import PIIMasker
+from memory.vector_rag import DocumentChunk, HybridRAGSearch
 
 
 class TestPIIMasker:
@@ -66,8 +65,18 @@ class TestHybridRAG:
 
     def test_hybrid_bm25_search(self):
         rag = HybridRAGSearch()
-        chunk1 = DocumentChunk(doc_id="d1", filename="sales.txt", text="Annual sales revenue for 2025 reached 5 million SAR", chunk_index=0)
-        chunk2 = DocumentChunk(doc_id="d2", filename="hr.txt", text="Company policy grants 30 days of annual leave", chunk_index=0)
+        chunk1 = DocumentChunk(
+            doc_id="d1",
+            filename="sales.txt",
+            text="Annual sales revenue for 2025 reached 5 million SAR",
+            chunk_index=0,
+        )
+        chunk2 = DocumentChunk(
+            doc_id="d2",
+            filename="hr.txt",
+            text="Company policy grants 30 days of annual leave",
+            chunk_index=0,
+        )
         rag.add_chunks([chunk1, chunk2])
 
         results = rag.hybrid_search("sales revenue", top_k=1)
@@ -85,6 +94,7 @@ class TestNewTools:
 
     def test_email_tool(self):
         from tools.registry import registry
+
         tool = registry.get("send_email_notification")
         assert tool is not None
         res = asyncio.run(tool.run(to_email="user@test.com", subject="Test", body="Hello"))
@@ -92,6 +102,7 @@ class TestNewTools:
 
     def test_webhook_tool(self):
         from tools.registry import registry
+
         tool = registry.get("send_webhook_alert")
         assert tool is not None
         res = asyncio.run(tool.run(webhook_url="https://httpbin.org/post", message="Test Alert"))

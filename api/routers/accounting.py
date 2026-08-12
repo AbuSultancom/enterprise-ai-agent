@@ -1,4 +1,5 @@
 """Accounting router: query, databases, discover, health endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Security
@@ -35,12 +36,18 @@ async def accounting_query(req: AccountingQuery, role: str = Security(require_ro
     """Run a whitelisted read-only accounting query (admin only)."""
     assert _accounting_db
     if req.query not in config_loader.allowed_accounting_queries():
-        raise HTTPException(status_code=403, detail=f"Query '{req.query}' is not allowed by settings")
-    audit("accounting_query", role, {"query": req.query, "params": req.params, "database": req.database})
+        raise HTTPException(
+            status_code=403, detail=f"Query '{req.query}' is not allowed by settings"
+        )
+    audit(
+        "accounting_query",
+        role,
+        {"query": req.query, "params": req.params, "database": req.database},
+    )
     try:
         return _accounting_db.run(req.query, db_name=req.database, **(req.params or {}))
     except (RuntimeError, ValueError, PermissionError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/health", dependencies=[Depends(require_role("admin"))])
@@ -54,7 +61,9 @@ async def accounting_health():
             schema = _accounting_db.get_schema_info(db["key"])
         except RuntimeError:
             schema = None
-        results.append({"key": db["key"], "name": db["name"], "connection": status, "schema": schema})
+        results.append(
+            {"key": db["key"], "name": db["name"], "connection": status, "schema": schema}
+        )
 
     default_key = _accounting_db.default_db
     return {
@@ -70,7 +79,7 @@ async def accounting_health():
 async def accounting_discover(db_url: str = "", name: str = ""):
     """Auto-discover table/column mappings from a live database."""
     assert _accounting_db
-    from connectors.accounting import discover_schema, SCHEMA_CONFIG_PATH, _save_multi_db_config
+    from connectors.accounting import SCHEMA_CONFIG_PATH, _save_multi_db_config, discover_schema
 
     if not db_url:
         dbs = _accounting_db.list_databases()
@@ -80,7 +89,9 @@ async def accounting_discover(db_url: str = "", name: str = ""):
         schema = _accounting_db._get_schema(first["key"])
         db_url = schema.db_url
         if not db_url:
-            raise HTTPException(status_code=400, detail=f"Database '{first['key']}' has no db_url set")
+            raise HTTPException(
+                status_code=400, detail=f"Database '{first['key']}' has no db_url set"
+            )
 
     try:
         discovered = discover_schema(db_url)
@@ -98,7 +109,11 @@ async def accounting_discover(db_url: str = "", name: str = ""):
         except (RuntimeError, ValueError):
             _accounting_db.add_database(target_key, name or "Discovered", db_url, discovered)
 
-        audit("accounting_discover", "admin", {"tables": len(discovered.tables), "database": target_key})
+        audit(
+            "accounting_discover",
+            "admin",
+            {"tables": len(discovered.tables), "database": target_key},
+        )
         return {
             "status": "ok",
             "tables": len(discovered.tables),
@@ -107,7 +122,7 @@ async def accounting_discover(db_url: str = "", name: str = ""):
             "schema": {k: v["table"] for k, v in discovered.tables.items()},
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/databases", dependencies=[Depends(require_role("admin"))])
@@ -117,9 +132,12 @@ async def list_accounting_databases():
 
 
 @router.post("/databases", dependencies=[Depends(require_role("admin"))])
-async def add_accounting_database(req: AddDatabaseRequest, role: str = Security(require_role("admin"))):
+async def add_accounting_database(
+    req: AddDatabaseRequest, role: str = Security(require_role("admin"))
+):
     assert _accounting_db
     from connectors.accounting import discover_schema
+
     schema = None
     if req.discover:
         try:
@@ -128,15 +146,20 @@ async def add_accounting_database(req: AddDatabaseRequest, role: str = Security(
             discovered.db_url = req.db_url
             schema = discovered
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Schema discovery failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Schema discovery failed: {e}") from e
     try:
         _accounting_db.add_database(req.key, req.name, req.db_url, schema)
         audit("accounting_add_db", role, {"key": req.key, "name": req.name})
-        return {"status": "ok", "key": req.key, "name": req.name, "tables": len(schema.tables) if schema else 0}
+        return {
+            "status": "ok",
+            "key": req.key,
+            "name": req.name,
+            "tables": len(schema.tables) if schema else 0,
+        }
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/databases/{db_key}", dependencies=[Depends(require_role("admin"))])

@@ -4,6 +4,7 @@ Controls what the agent is allowed to do: which tools are enabled,
 whether the knowledge base is used, and which accounting queries are allowed.
 Missing file = permissive defaults (all built-ins on).
 """
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,7 @@ SETTINGS_PATH = os.getenv("SETTINGS_PATH", "config/settings.json")
 DEFAULTS: dict = {
     "agent": {
         "name": "Enterprise AI Agent",
-        "language": "auto",   # auto | ar | en — language the agent answers in
+        "language": "auto",  # auto | ar | en — language the agent answers in
         "personality": "a professional, concise enterprise assistant",
     },
     "permissions": {
@@ -29,15 +30,23 @@ DEFAULTS: dict = {
         "enabled": False,
         "read_only": True,
         "allowed_queries": [
-            "sales_summary", "revenue_by_month", "top_customers",
-            "expenses_summary", "invoice_lookup", "cash_balance",
+            "sales_summary",
+            "revenue_by_month",
+            "top_customers",
+            "expenses_summary",
+            "invoice_lookup",
+            "cash_balance",
         ],
     },
 }
 
 ACCOUNTING_TOOLS = {
-    "get_sales_summary", "get_revenue_by_month", "get_top_customers",
-    "get_expenses_summary", "get_invoice", "get_cash_balance",
+    "get_sales_summary",
+    "get_revenue_by_month",
+    "get_top_customers",
+    "get_expenses_summary",
+    "get_invoice",
+    "get_cash_balance",
 }
 
 
@@ -84,4 +93,3 @@ def save_settings(new_settings: dict) -> None:
     os.makedirs(os.path.dirname(SETTINGS_PATH) or ".", exist_ok=True)
     with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
-

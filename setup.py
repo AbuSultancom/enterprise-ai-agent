@@ -10,6 +10,7 @@
 ║    python setup.py --update     → Update existing config             ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,14 +18,13 @@ import getpass
 import io
 import json
 import locale
-import os
 import re
 import secrets
 import shutil
 import subprocess
 import sys
-import time
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -45,10 +45,10 @@ if sys.platform == "win32":
         pass
 
 ENV_FILE = ROOT / ".env"
-SETTINGS_FILE = ROOT / "settings.json"          # legacy flat file
-SETTINGS_CFG  = CONFIG_DIR / "settings.json"    # preferred location
-SCHEMA_FILE   = CONFIG_DIR / "accounting_schema.json"
-BACKUP_DIR    = ROOT / "backups"
+SETTINGS_FILE = ROOT / "settings.json"  # legacy flat file
+SETTINGS_CFG = CONFIG_DIR / "settings.json"  # preferred location
+SCHEMA_FILE = CONFIG_DIR / "accounting_schema.json"
+BACKUP_DIR = ROOT / "backups"
 
 # ── Bilingual strings ─────────────────────────────────────────────────────
 STR: dict[str, dict[str, str]] = {
@@ -133,38 +133,51 @@ L: dict[str, str] = STR[DEFAULT_LANG]
 # ║  Terminal UI helpers                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+
 class C:
     """ANSI color codes."""
-    HDR    = "\033[95m"
-    BLUE   = "\033[94m"
-    CYAN   = "\033[96m"
-    GREEN  = "\033[92m"
+
+    HDR = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
     YELLOW = "\033[93m"
-    RED    = "\033[91m"
-    BOLD   = "\033[1m"
-    DIM    = "\033[2m"
-    RESET  = "\033[0m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
 
     @staticmethod
-    def ok(s: str) -> str:    return f"{C.GREEN}{s}{C.RESET}"
+    def ok(s: str) -> str:
+        return f"{C.GREEN}{s}{C.RESET}"
+
     @staticmethod
-    def err(s: str) -> str:   return f"{C.RED}{s}{C.RESET}"
+    def err(s: str) -> str:
+        return f"{C.RED}{s}{C.RESET}"
+
     @staticmethod
-    def warn(s: str) -> str:  return f"{C.YELLOW}{s}{C.RESET}"
+    def warn(s: str) -> str:
+        return f"{C.YELLOW}{s}{C.RESET}"
+
     @staticmethod
-    def info(s: str) -> str:  return f"{C.CYAN}{s}{C.RESET}"
+    def info(s: str) -> str:
+        return f"{C.CYAN}{s}{C.RESET}"
+
     @staticmethod
-    def bold(s: str) -> str:  return f"{C.BOLD}{s}{C.RESET}"
+    def bold(s: str) -> str:
+        return f"{C.BOLD}{s}{C.RESET}"
+
     @staticmethod
-    def dim(s: str) -> str:   return f"{C.DIM}{s}{C.RESET}"
+    def dim(s: str) -> str:
+        return f"{C.DIM}{s}{C.RESET}"
 
 
 def banner(title: str) -> None:
     """Print a full-width banner."""
     w = min(shutil.get_terminal_size((80, 20)).columns, 76)
     inner = title.center(w - 4)
-    top    = C.CYAN + "╔" + "═" * (w - 2) + "╗" + C.RESET
-    mid    = C.CYAN + "║ " + C.RESET + C.BOLD + inner + C.RESET + C.CYAN + " ║" + C.RESET
+    top = C.CYAN + "╔" + "═" * (w - 2) + "╗" + C.RESET
+    mid = C.CYAN + "║ " + C.RESET + C.BOLD + inner + C.RESET + C.CYAN + " ║" + C.RESET
     bottom = C.CYAN + "╚" + "═" * (w - 2) + "╝" + C.RESET
     print(f"\n{top}\n{mid}\n{bottom}\n")
 
@@ -236,7 +249,7 @@ def choose(options: list[str], prompt: str = "", default: int = 0) -> int:
         print(f"\n  {C.BOLD}{prompt}{C.RESET}")
     for i, opt in enumerate(options, 1):
         marker = C.GREEN + "  ▶" + C.RESET if (i - 1) == default else "   "
-        num    = C.CYAN + f"[{i}]" + C.RESET
+        num = C.CYAN + f"[{i}]" + C.RESET
         print(f"{marker} {num} {opt}")
     while True:
         try:
@@ -254,8 +267,8 @@ def choose(options: list[str], prompt: str = "", default: int = 0) -> int:
 def spinner_run(text: str, func, *args, **kwargs) -> Any:
     """Run func in background while displaying a spinner."""
     result: list[Any] = [None]
-    exc:    list[Exception | None] = [None]
-    done:   list[bool] = [False]
+    exc: list[Exception | None] = [None]
+    done: list[bool] = [False]
 
     def _worker():
         try:
@@ -283,6 +296,7 @@ def spinner_run(text: str, func, *args, **kwargs) -> Any:
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Config Manager                                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
+
 
 class ConfigManager:
     """Reads and writes .env, settings.json, and accounting_schema.json."""
@@ -317,7 +331,7 @@ class ConfigManager:
 
     def backup(self) -> Path:
         BACKUP_DIR.mkdir(exist_ok=True)
-        ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         dst = BACKUP_DIR / f"backup_{ts}"
         dst.mkdir(exist_ok=True)
         for src in (ENV_FILE, SETTINGS_FILE, SETTINGS_CFG, SCHEMA_FILE):
@@ -350,9 +364,7 @@ class ConfigManager:
         SETTINGS_CFG.write_text(payload, encoding="utf-8")
 
     def write_schema(self, schema: dict) -> None:
-        SCHEMA_FILE.write_text(
-            json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        SCHEMA_FILE.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -360,27 +372,27 @@ class ConfigManager:
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 DB_DRIVERS = {
-    "oracle":     "oracle+oracledb",
-    "mssql":      "mssql+pyodbc",
-    "mysql":      "mysql+pymysql",
+    "oracle": "oracle+oracledb",
+    "mssql": "mssql+pyodbc",
+    "mysql": "mysql+pymysql",
     "postgresql": "postgresql+psycopg2",
-    "sqlite":     "sqlite",
+    "sqlite": "sqlite",
 }
 
 DB_DISPLAY_NAMES = {
-    "oracle":     "Oracle Database (Onyx Pro)",
-    "mssql":      "Microsoft SQL Server",
-    "mysql":      "MySQL / MariaDB",
+    "oracle": "Oracle Database (Onyx Pro)",
+    "mssql": "Microsoft SQL Server",
+    "mysql": "MySQL / MariaDB",
     "postgresql": "PostgreSQL",
-    "sqlite":     "SQLite (local file)",
+    "sqlite": "SQLite (local file)",
 }
 
 DB_DEFAULT_PORTS = {
-    "oracle":     "1521",
-    "mssql":      "1433",
-    "mysql":      "3306",
+    "oracle": "1521",
+    "mssql": "1433",
+    "mysql": "3306",
     "postgresql": "5432",
-    "sqlite":     "",
+    "sqlite": "",
 }
 
 
@@ -394,16 +406,17 @@ def build_connection_url(db_type: str, cfg: dict) -> str:
     port = cfg.get("port", DB_DEFAULT_PORTS[db_type])
     name = cfg.get("db_name", "")
     user = cfg.get("username", "")
-    pw   = cfg.get("password", "")
+    pw = cfg.get("password", "")
 
     # URL-encode special chars in password
     import urllib.parse
+
     pw_enc = urllib.parse.quote_plus(str(pw)) if pw else ""
     user_part = f"{user}:{pw_enc}@" if user else ""
 
     if db_type == "mssql":
         driver = cfg.get("odbc_driver", "ODBC Driver 18 for SQL Server")
-        trust  = "TrustServerCertificate=yes"
+        trust = "TrustServerCertificate=yes"
         return (
             f"{drv}://{user_part}{host}:{port}/{name}"
             f"?driver={urllib.parse.quote_plus(driver)}&{trust}"
@@ -419,6 +432,7 @@ def test_db_connection(url: str) -> tuple[bool, str]:
     """Test a database connection; returns (success, message)."""
     try:
         from sqlalchemy import create_engine, text  # type: ignore
+
         # Oracle's driver does not accept the pyodbc-style "timeout" connect arg
         connect_args = {} if url.startswith("oracle") else {"timeout": 8}
         engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
@@ -438,7 +452,9 @@ def discover_db_schema(url: str) -> dict:
     Returns a dict mapping logical names → SchemaConfig table entries.
     """
     try:
-        from sqlalchemy import create_engine, inspect as sa_inspect  # type: ignore
+        from sqlalchemy import create_engine  # type: ignore
+        from sqlalchemy import inspect as sa_inspect
+
         engine = create_engine(url)
         inspector = sa_inspect(engine)
         tables_raw = inspector.get_table_names()
@@ -462,24 +478,24 @@ def discover_db_schema(url: str) -> dict:
 # ── Map well-known table names to logical names ──────────────────────────
 _TABLE_ALIASES = {
     # Onyx Pro / Arabic ERP names
-    "salesinvoices":     "sales_invoices",
-    "purchaseinvoices":  "purchase_invoices",
-    "journalentries":    "journal_entries",
-    "customers":         "customers",
-    "vendors":           "vendors",
-    "accounts":          "accounts",
-    "items":             "items",
-    "employees":         "employees",
-    "salaries":          "salaries",
-    "inventory":         "inventory",
+    "salesinvoices": "sales_invoices",
+    "purchaseinvoices": "purchase_invoices",
+    "journalentries": "journal_entries",
+    "customers": "customers",
+    "vendors": "vendors",
+    "accounts": "accounts",
+    "items": "items",
+    "employees": "employees",
+    "salaries": "salaries",
+    "inventory": "inventory",
     "stocktransactions": "stock_transactions",
     # Generic
-    "invoice":           "sales_invoices",
-    "customer":          "customers",
-    "vendor":            "vendors",
-    "account":           "accounts",
-    "item":              "items",
-    "product":           "items",
+    "invoice": "sales_invoices",
+    "customer": "customers",
+    "vendor": "vendors",
+    "account": "accounts",
+    "item": "items",
+    "product": "items",
 }
 
 
@@ -498,6 +514,7 @@ def normalize_discovered(raw: dict) -> dict:
 # ║  CLI Wizard                                                              ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+
 class CLIWizard:
     TOTAL_STEPS = 8
 
@@ -506,13 +523,13 @@ class CLIWizard:
         self.update_mode = update_mode
         # Always load existing values so the wizard can detect prior configuration
         # and offer "reconfigure all" or "keep existing" at startup.
-        self.existing_env      = cfg.load_env()
+        self.existing_env = cfg.load_env()
         self.existing_settings = cfg.load_settings()
-        self.existing_schema   = cfg.load_schema()
+        self.existing_schema = cfg.load_schema()
 
-        self.env:      dict[str, str] = dict(self.existing_env)
+        self.env: dict[str, str] = dict(self.existing_env)
         self.settings: dict[str, Any] = dict(self.existing_settings)
-        self.schema:   dict[str, Any] = dict(self.existing_schema)
+        self.schema: dict[str, Any] = dict(self.existing_schema)
 
     # ── Step helpers ──────────────────────────────────────────────────────
 
@@ -545,9 +562,9 @@ class CLIWizard:
                 self.env.clear()
                 self.settings.clear()
                 self.schema.clear()
-                self.existing_env      = {}
+                self.existing_env = {}
                 self.existing_settings = {}
-                self.existing_schema   = {}
+                self.existing_schema = {}
                 has_existing = False
                 self._ok("Starting fresh configuration...")
             else:
@@ -555,13 +572,13 @@ class CLIWizard:
 
         # Each option asks "edit or skip" when a previous configuration exists.
         steps = [
-            ("Language",            self.step_language),
-            ("LLM Provider/Model",  self.step_llm),
-            ("Agent Identity",      self.step_identity),
+            ("Language", self.step_language),
+            ("LLM Provider/Model", self.step_llm),
+            ("Agent Identity", self.step_identity),
             ("Security & API Keys", self.step_security),
-            ("Channels",            self.step_channels),
-            ("Database",            self.step_database),
-            ("Permissions",         self.step_permissions),
+            ("Channels", self.step_channels),
+            ("Database", self.step_database),
+            ("Permissions", self.step_permissions),
         ]
         for title, fn in steps:
             if has_existing:
@@ -605,7 +622,9 @@ class CLIWizard:
         ]
         provider_keys = ["ollama", "openai", "anthropic", "google", "deepseek", "custom"]
         current_provider = self.settings.get("llm_provider", "ollama")
-        default_idx = provider_keys.index(current_provider) if current_provider in provider_keys else 0
+        default_idx = (
+            provider_keys.index(current_provider) if current_provider in provider_keys else 0
+        )
 
         idx = choose(providers, "LLM Provider:", default=default_idx)
         provider = provider_keys[idx]
@@ -613,17 +632,31 @@ class CLIWizard:
 
         # Model selection
         model_options: dict[str, list[str]] = {
-            "ollama":    ["qwen2.5:7b", "qwen2.5:14b", "llama3.1:8b", "deepseek-r1:14b", "mistral:7b", "Other"],
-            "openai":    ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini", "Other"],
-            "anthropic": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307", "Other"],
-            "google":    ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "Other"],
-            "deepseek":  ["deepseek-chat", "deepseek-r1", "Other"],
-            "custom":    ["Other"],
+            "ollama": [
+                "qwen2.5:7b",
+                "qwen2.5:14b",
+                "llama3.1:8b",
+                "deepseek-r1:14b",
+                "mistral:7b",
+                "Other",
+            ],
+            "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini", "Other"],
+            "anthropic": [
+                "claude-3-5-sonnet-20241022",
+                "claude-3-opus-20240229",
+                "claude-3-haiku-20240307",
+                "Other",
+            ],
+            "google": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "Other"],
+            "deepseek": ["deepseek-chat", "deepseek-r1", "Other"],
+            "custom": ["Other"],
         }
         models = model_options.get(provider, ["Other"])
         current_model_raw = self.existing_env.get("DEFAULT_MODEL", "")
         # Strip provider prefix for display
-        current_model = current_model_raw.split(":", 1)[-1] if ":" in current_model_raw else current_model_raw
+        current_model = (
+            current_model_raw.split(":", 1)[-1] if ":" in current_model_raw else current_model_raw
+        )
         m_default = 0
         for i, m in enumerate(models):
             if current_model and current_model in m:
@@ -649,17 +682,25 @@ class CLIWizard:
 
         # Base URL
         default_urls = {
-            "ollama":    "http://localhost:11434",
-            "openai":    "https://api.openai.com/v1",
+            "ollama": "http://localhost:11434",
+            "openai": "https://api.openai.com/v1",
             "anthropic": "https://api.anthropic.com/v1",
-            "google":    "https://generativelanguage.googleapis.com/v1beta",
-            "deepseek":  "https://api.deepseek.com/v1",
-            "custom":    "http://localhost:11434",
+            "google": "https://generativelanguage.googleapis.com/v1beta",
+            "deepseek": "https://api.deepseek.com/v1",
+            "custom": "http://localhost:11434",
         }
-        current_url = self.existing_env.get("OPENAI_BASE_URL") or self.existing_env.get("LLM_URL") or default_urls[provider]
+        current_url = (
+            self.existing_env.get("OPENAI_BASE_URL")
+            or self.existing_env.get("LLM_URL")
+            or default_urls[provider]
+        )
         url = ask("API Base URL", default=current_url, required=True)
         self.env["OPENAI_BASE_URL"] = url
-        self.env["OLLAMA_BASE_URL"] = url if provider == "ollama" else self.env.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.env["OLLAMA_BASE_URL"] = (
+            url
+            if provider == "ollama"
+            else self.env.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        )
 
         # API Key
         if provider != "ollama":
@@ -678,12 +719,13 @@ class CLIWizard:
         else:
             # Test Ollama connectivity
             if ask_yes("\n  Test Ollama connection now?", default=True):
+
                 def _test_ollama():
                     import urllib.request
+
                     try:
                         req = urllib.request.Request(
-                            f"{url}/api/tags",
-                            headers={"User-Agent": "EnterpriseAI/3.0"}
+                            f"{url}/api/tags", headers={"User-Agent": "EnterpriseAI/3.0"}
                         )
                         with urllib.request.urlopen(req, timeout=6) as r:
                             return r.status, r.read()
@@ -727,15 +769,15 @@ class CLIWizard:
             hint="Describe how the agent should behave",
         )
         reply_lang_options = ["Auto-detect (from user message)", "English only", "Arabic only"]
-        reply_lang_keys    = ["auto", "en", "ar"]
+        reply_lang_keys = ["auto", "en", "ar"]
         current_rl = agent.get("reply_language", "auto")
         rl_default = reply_lang_keys.index(current_rl) if current_rl in reply_lang_keys else 0
         rl_idx = choose(reply_lang_options, "Agent reply language:", default=rl_default)
 
         self.settings["agent"] = {
             **agent,
-            "name":           name or "Enterprise AI Agent",
-            "personality":    personality or "a professional, concise enterprise assistant",
+            "name": name or "Enterprise AI Agent",
+            "personality": personality or "a professional, concise enterprise assistant",
             "reply_language": reply_lang_keys[rl_idx],
         }
         self._ok(f"Agent: {name}")
@@ -747,21 +789,21 @@ class CLIWizard:
     def step_security(self) -> None:
         self._header(4, L["step4"])
         existing_admin = self.existing_env.get("ADMIN_KEY", "")
-        existing_user  = self.existing_env.get("USER_KEY", "")
+        existing_user = self.existing_env.get("USER_KEY", "")
 
         if existing_admin and existing_user:
             self._info(f"Existing ADMIN_KEY: {existing_admin[:8]}…")
             self._info(f"Existing USER_KEY:  {existing_user[:8]}…")
             if not ask_yes("Regenerate API keys?", default=False):
                 self.env["ADMIN_KEY"] = existing_admin
-                self.env["USER_KEY"]  = existing_user
+                self.env["USER_KEY"] = existing_user
                 self._ok("Keeping existing keys")
                 return
 
         admin_key = secrets.token_urlsafe(40)
-        user_key  = secrets.token_urlsafe(40)
+        user_key = secrets.token_urlsafe(40)
         self.env["ADMIN_KEY"] = admin_key
-        self.env["USER_KEY"]  = user_key
+        self.env["USER_KEY"] = user_key
 
         # Also update the legacy API_KEYS format that the app uses
         self.env["API_KEYS"] = f"admin:{admin_key},user:{user_key}"
@@ -772,8 +814,8 @@ class CLIWizard:
         print(f"\n  {C.YELLOW}⚠  Save these keys! They will not be shown again.{C.RESET}")
 
         # JWT + encryption keys
-        self.env["JWT_SECRET"]      = secrets.token_urlsafe(40)
-        self.env["ENCRYPTION_KEY"]  = secrets.token_urlsafe(40)
+        self.env["JWT_SECRET"] = secrets.token_urlsafe(40)
+        self.env["ENCRYPTION_KEY"] = secrets.token_urlsafe(40)
         self._ok("Security keys generated")
 
     # ──────────────────────────────────────────────────────────────────────
@@ -849,16 +891,19 @@ class CLIWizard:
         # Email / SMTP
         if ask_yes("Configure SMTP for email notifications?", default=False):
             smtp_server = ask("SMTP Server", default="smtp.gmail.com")
-            smtp_port   = ask("SMTP Port", default="587")
-            smtp_user   = ask("SMTP Username / Email")
-            smtp_pass   = ask("SMTP Password / App Password", password=True)
-            smtp_from   = ask("From Address", default=smtp_user)
+            smtp_port = ask("SMTP Port", default="587")
+            smtp_user = ask("SMTP Username / Email")
+            smtp_pass = ask("SMTP Password / App Password", password=True)
+            smtp_from = ask("From Address", default=smtp_user)
             if smtp_server:
                 self.env["SMTP_SERVER"] = smtp_server
-                self.env["SMTP_PORT"]   = smtp_port or "587"
-            if smtp_user:   self.env["SMTP_USER"] = smtp_user
-            if smtp_pass:   self.env["SMTP_PASS"] = smtp_pass
-            if smtp_from:   self.env["SMTP_FROM"] = smtp_from
+                self.env["SMTP_PORT"] = smtp_port or "587"
+            if smtp_user:
+                self.env["SMTP_USER"] = smtp_user
+            if smtp_pass:
+                self.env["SMTP_PASS"] = smtp_pass
+            if smtp_from:
+                self.env["SMTP_FROM"] = smtp_from
             self._ok("SMTP configured")
 
         self.settings["channels"] = channels
@@ -902,20 +947,23 @@ class CLIWizard:
         try:
             out = subprocess.run(
                 [
-                    "powershell.exe", "-NoProfile", "-Command",
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-Command",
                     "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | "
                     "Where-Object { $_.CommandLine -match 'index\\.js' -and "
                     "$_.CommandLine -notmatch 'openclaw|node_modules|\\\\dist' } | "
                     "ForEach-Object { $_.ProcessId }",
                 ],
-                capture_output=True, text=True, timeout=20,
+                capture_output=True,
+                text=True,
+                timeout=20,
             )
             pids = [p for p in out.stdout.split() if p.isdigit()]
             if not pids:
                 return False
             for pid in pids:
-                subprocess.run(["taskkill", "/PID", pid, "/F"],
-                               capture_output=True, timeout=15)
+                subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=15)
             time.sleep(2)  # let the OS release the file locks
             return True
         except Exception:
@@ -936,7 +984,9 @@ class CLIWizard:
         existing_enabled = self.settings.get("accounting", {}).get("enabled", False)
         if not ask_yes("Enable database / accounting integration?", default=existing_enabled):
             self.settings.setdefault("accounting", {})["enabled"] = False
-            self._info("Accounting integration disabled. You can enable it later by re-running setup.")
+            self._info(
+                "Accounting integration disabled. You can enable it later by re-running setup."
+            )
             return
 
         self.settings.setdefault("accounting", {})["enabled"] = True
@@ -951,10 +1001,10 @@ class CLIWizard:
             if db_cfg:
                 key = db_cfg["key"]
                 new_schema["databases"][key] = {
-                    "name":    db_cfg["name"],
-                    "db_url":  db_cfg["db_url"],
+                    "name": db_cfg["name"],
+                    "db_url": db_cfg["db_url"],
                     "enabled": True,
-                    "tables":  db_cfg["tables"],
+                    "tables": db_cfg["tables"],
                     "query_aliases": {},
                 }
                 self._ok(f"Database '{db_cfg['name']}' added (key: {key})")
@@ -970,9 +1020,14 @@ class CLIWizard:
         print()
         self._info("Configure accounting query permissions:")
         all_queries = [
-            "sales_summary", "revenue_by_month", "top_customers",
-            "expenses_summary", "invoice_lookup", "cash_balance",
-            "vendor_balances", "sales_by_item",
+            "sales_summary",
+            "revenue_by_month",
+            "top_customers",
+            "expenses_summary",
+            "invoice_lookup",
+            "cash_balance",
+            "vendor_balances",
+            "sales_by_item",
         ]
         allowed = []
         for q in all_queries:
@@ -980,11 +1035,13 @@ class CLIWizard:
                 allowed.append(q)
 
         acct = self.settings.get("accounting", {})
-        acct.update({
-            "enabled":        True,
-            "read_only":      True,
-            "allowed_queries": allowed,
-        })
+        acct.update(
+            {
+                "enabled": True,
+                "read_only": True,
+                "allowed_queries": allowed,
+            }
+        )
         self.settings["accounting"] = acct
         self._ok("Database setup complete")
 
@@ -994,32 +1051,37 @@ class CLIWizard:
 
         # DB type
         db_type_options = list(DB_DISPLAY_NAMES.values())
-        db_type_keys    = list(DB_DISPLAY_NAMES.keys())
+        db_type_keys = list(DB_DISPLAY_NAMES.keys())
         type_idx = choose(db_type_options, "Database Type:", default=0)
-        db_type  = db_type_keys[type_idx]
+        db_type = db_type_keys[type_idx]
 
         # Logical key (internal identifier)
         default_key_map = {
-            "oracle":     "onyxdb",
-            "mssql":      "onyxdb",
-            "mysql":      "mysqldb",
+            "oracle": "onyxdb",
+            "mssql": "onyxdb",
+            "mysql": "mysqldb",
             "postgresql": "pgdb",
-            "sqlite":     "localdb",
+            "sqlite": "localdb",
         }
         existing_keys = list(existing_schema.get("databases", {}).keys())
-        default_key   = default_key_map[db_type]
+        default_key = default_key_map[db_type]
         if default_key in existing_keys:
             default_key = f"{default_key}_{len(existing_keys) + 1}"
 
-        key = ask(
-            "Internal key (short name for this DB)",
-            default=default_key,
-            required=True,
-            hint="letters/numbers/underscore only, e.g. 'onyxdb'",
-        ) or default_key
+        key = (
+            ask(
+                "Internal key (short name for this DB)",
+                default=default_key,
+                required=True,
+                hint="letters/numbers/underscore only, e.g. 'onyxdb'",
+            )
+            or default_key
+        )
         key = re.sub(r"[^a-zA-Z0-9_]", "_", key).lower()
 
-        display_name = ask("Database display name", default=key.replace("_", " ").title(), required=True)
+        display_name = ask(
+            "Database display name", default=key.replace("_", " ").title(), required=True
+        )
 
         # ── Connection details by DB type ──────────────────────────────────
         conn_cfg: dict[str, str] = {}
@@ -1039,43 +1101,58 @@ class CLIWizard:
                     conn_cfg["_full_url"] = full_url
             else:
                 # Step-by-step
-                existing_url = ""
                 for db_entry in existing_schema.get("databases", {}).values():
                     if db_type in db_entry.get("db_url", ""):
-                        existing_url = db_entry["db_url"]
                         break
 
-                print(f"\n  {C.DIM}Enter connection details for {DB_DISPLAY_NAMES[db_type]}{C.RESET}")
+                print(
+                    f"\n  {C.DIM}Enter connection details for {DB_DISPLAY_NAMES[db_type]}{C.RESET}"
+                )
 
-                conn_cfg["host"] = ask(
-                    "Host / IP address",
-                    default="localhost",
-                    required=True,
-                    hint="e.g. 192.168.1.10 or db.company.local",
-                ) or "localhost"
+                conn_cfg["host"] = (
+                    ask(
+                        "Host / IP address",
+                        default="localhost",
+                        required=True,
+                        hint="e.g. 192.168.1.10 or db.company.local",
+                    )
+                    or "localhost"
+                )
 
-                conn_cfg["port"] = ask(
-                    "Port",
-                    default=DB_DEFAULT_PORTS[db_type],
-                    hint=f"default is {DB_DEFAULT_PORTS[db_type]}",
-                ) or DB_DEFAULT_PORTS[db_type]
+                conn_cfg["port"] = (
+                    ask(
+                        "Port",
+                        default=DB_DEFAULT_PORTS[db_type],
+                        hint=f"default is {DB_DEFAULT_PORTS[db_type]}",
+                    )
+                    or DB_DEFAULT_PORTS[db_type]
+                )
 
                 is_oracle = db_type == "oracle"
-                conn_cfg["db_name"] = ask(
-                    "Service name" if is_oracle else "Database name",
-                    required=True,
-                    hint="e.g. ORCL or ORCLPDB1" if is_oracle else "e.g. OnyxDB, CompanyDB",
-                ) or ""
+                conn_cfg["db_name"] = (
+                    ask(
+                        "Service name" if is_oracle else "Database name",
+                        required=True,
+                        hint="e.g. ORCL or ORCLPDB1" if is_oracle else "e.g. OnyxDB, CompanyDB",
+                    )
+                    or ""
+                )
 
-                conn_cfg["username"] = ask(
-                    "Username",
-                    hint="use a read-only user in production",
-                ) or ""
+                conn_cfg["username"] = (
+                    ask(
+                        "Username",
+                        hint="use a read-only user in production",
+                    )
+                    or ""
+                )
 
-                conn_cfg["password"] = ask(
-                    "Password",
-                    password=True,
-                ) or ""
+                conn_cfg["password"] = (
+                    ask(
+                        "Password",
+                        password=True,
+                    )
+                    or ""
+                )
 
                 if db_type == "mssql":
                     # ODBC driver
@@ -1094,7 +1171,9 @@ class CLIWizard:
                     odbc_idx = choose(odbc_options, "ODBC Driver:", default=0)
                     odbc_drv = odbc_keys[odbc_idx]
                     if odbc_drv == "custom":
-                        odbc_drv = ask("Driver name", required=True) or "ODBC Driver 18 for SQL Server"
+                        odbc_drv = (
+                            ask("Driver name", required=True) or "ODBC Driver 18 for SQL Server"
+                        )
                     conn_cfg["odbc_driver"] = odbc_drv
 
         # Build URL
@@ -1124,7 +1203,9 @@ class CLIWizard:
                                 tables = normalize_discovered(raw)
                                 print(f"  {C.GREEN}✔  Found {len(tables)} tables{C.RESET}")
                                 sample = list(tables.keys())[:8]
-                                print(f"  {C.DIM}Tables: {', '.join(sample)}{'…' if len(tables) > 8 else ''}{C.RESET}")
+                                print(
+                                    f"  {C.DIM}Tables: {', '.join(sample)}{'…' if len(tables) > 8 else ''}{C.RESET}"
+                                )
                         except Exception as e:
                             self._warn(f"Auto-discover failed: {e}")
                 else:
@@ -1137,19 +1218,25 @@ class CLIWizard:
 
         # ── If no tables discovered, use defaults for known DB types ──────
         if not tables and db_type == "mssql":
-            self._info("Using default Onyx Pro table mappings (you can edit accounting_schema.json later).")
+            self._info(
+                "Using default Onyx Pro table mappings (you can edit accounting_schema.json later)."
+            )
             tables = _default_onyx_tables()
 
         # ── Store URL in .env ─────────────────────────────────────────────
-        env_key = f"ACCOUNTING_DB_URL_{key.upper()}" if len(existing_schema.get("databases", {})) > 0 else "ACCOUNTING_DB_URL"
+        env_key = (
+            f"ACCOUNTING_DB_URL_{key.upper()}"
+            if len(existing_schema.get("databases", {})) > 0
+            else "ACCOUNTING_DB_URL"
+        )
         self.env[env_key] = db_url
         # Also set the primary key for backward compatibility
         if not self.env.get("ACCOUNTING_DB_URL"):
             self.env["ACCOUNTING_DB_URL"] = db_url
 
         return {
-            "key":    key,
-            "name":   display_name or key,
+            "key": key,
+            "name": display_name or key,
             "db_url": db_url,
             "tables": tables,
         }
@@ -1163,17 +1250,17 @@ class CLIWizard:
         existing = self.settings.get("permissions", {})
 
         perm_items = [
-            ("web_search",          "Web search",                        True),
-            ("calculator",          "Calculator",                        True),
-            ("get_current_time",    "Get current time",                  True),
-            ("read_file",           "File system read access",           False),
-            ("knowledge_rag",       "Knowledge base (RAG)",              True),
-            ("accounting_tools",    "Accounting / ERP queries",          False),
-            ("generate_report",     "Report generation",                 True),
-            ("list_reports",        "List reports",                      True),
-            ("search_conversations","Search conversation history",       True),
-            ("send_email",          "Send email notifications",          False),
-            ("send_webhook",        "Send webhook alerts (Slack/Teams)", False),
+            ("web_search", "Web search", True),
+            ("calculator", "Calculator", True),
+            ("get_current_time", "Get current time", True),
+            ("read_file", "File system read access", False),
+            ("knowledge_rag", "Knowledge base (RAG)", True),
+            ("accounting_tools", "Accounting / ERP queries", False),
+            ("generate_report", "Report generation", True),
+            ("list_reports", "List reports", True),
+            ("search_conversations", "Search conversation history", True),
+            ("send_email", "Send email notifications", False),
+            ("send_webhook", "Send webhook alerts (Slack/Teams)", False),
         ]
 
         perms: dict[str, bool] = {}
@@ -1200,11 +1287,15 @@ class CLIWizard:
         agent = self.settings.get("agent", {})
         print(f"  {C.CYAN}Agent:{C.RESET}      {agent.get('name', '—')}")
         print(f"  {C.CYAN}LLM:{C.RESET}        {self.env.get('DEFAULT_MODEL', '—')}")
-        print(f"  {C.CYAN}LLM URL:{C.RESET}    {self.env.get('OPENAI_BASE_URL', self.env.get('OLLAMA_BASE_URL', '—'))}")
+        print(
+            f"  {C.CYAN}LLM URL:{C.RESET}    {self.env.get('OPENAI_BASE_URL', self.env.get('OLLAMA_BASE_URL', '—'))}"
+        )
         print(f"  {C.CYAN}Admin Key:{C.RESET}  {self.env.get('ADMIN_KEY', '—')[:12]}…")
         print(f"  {C.CYAN}User Key:{C.RESET}   {self.env.get('USER_KEY', '—')[:12]}…")
         acct = self.settings.get("accounting", {})
-        print(f"  {C.CYAN}Accounting:{C.RESET} {'✔ enabled' if acct.get('enabled') else '✗ disabled'}")
+        print(
+            f"  {C.CYAN}Accounting:{C.RESET} {'✔ enabled' if acct.get('enabled') else '✗ disabled'}"
+        )
         db_count = len(self.schema.get("databases", {}))
         if db_count:
             print(f"  {C.CYAN}Databases:{C.RESET}  {db_count} configured")
@@ -1213,7 +1304,7 @@ class CLIWizard:
                 print(f"    {C.DIM}• {v['name']} ({k}) — {tbl_count} tables{C.RESET}")
 
         # ── Confirm ───────────────────────────────────────────────────────
-        if not ask_yes(f"\n  Save configuration?", default=True):
+        if not ask_yes("\n  Save configuration?", default=True):
             print(C.warn("\n  Setup cancelled — no files were modified."))
             sys.exit(0)
 
@@ -1262,43 +1353,62 @@ class CLIWizard:
 
 # ── Default Onyx Pro table mappings (used when auto-discover is skipped) ─
 
+
 def _default_onyx_tables() -> dict:
     return {
         "sales_invoices": {
             "table": "SalesInvoices",
             "columns": {
-                "id": "InvoiceID", "number": "InvoiceNo", "date": "InvoiceDate",
-                "net_total": "NetTotal", "tax": "TaxAmount", "discount": "DiscountAmount",
-                "status": "Status", "customer_id": "CustomerID",
+                "id": "InvoiceID",
+                "number": "InvoiceNo",
+                "date": "InvoiceDate",
+                "net_total": "NetTotal",
+                "tax": "TaxAmount",
+                "discount": "DiscountAmount",
+                "status": "Status",
+                "customer_id": "CustomerID",
             },
         },
         "customers": {
             "table": "Customers",
             "columns": {
-                "id": "CustomerID", "name": "CustomerName", "code": "CustomerCode",
-                "phone": "Phone", "email": "Email",
+                "id": "CustomerID",
+                "name": "CustomerName",
+                "code": "CustomerCode",
+                "phone": "Phone",
+                "email": "Email",
             },
         },
         "accounts": {
             "table": "Accounts",
             "columns": {
-                "id": "AccountID", "name": "AccountName", "code": "AccountCode",
+                "id": "AccountID",
+                "name": "AccountName",
+                "code": "AccountCode",
                 "type": "AccountType",
             },
         },
         "journal_entries": {
             "table": "JournalEntries",
             "columns": {
-                "id": "EntryID", "date": "EntryDate", "account_id": "AccountID",
-                "debit": "Debit", "credit": "Credit", "description": "Description",
+                "id": "EntryID",
+                "date": "EntryDate",
+                "account_id": "AccountID",
+                "debit": "Debit",
+                "credit": "Credit",
+                "description": "Description",
                 "reference": "ReferenceNo",
             },
         },
         "purchase_invoices": {
             "table": "PurchaseInvoices",
             "columns": {
-                "id": "PurchaseID", "number": "PurchaseNo", "date": "PurchaseDate",
-                "net_total": "NetTotal", "tax": "TaxAmount", "status": "Status",
+                "id": "PurchaseID",
+                "number": "PurchaseNo",
+                "date": "PurchaseDate",
+                "net_total": "NetTotal",
+                "tax": "TaxAmount",
+                "status": "Status",
                 "vendor_id": "VendorID",
             },
         },
@@ -1309,8 +1419,11 @@ def _default_onyx_tables() -> dict:
         "items": {
             "table": "Items",
             "columns": {
-                "id": "ItemID", "name": "ItemName", "code": "ItemCode",
-                "category": "Category", "unit_price": "UnitPrice",
+                "id": "ItemID",
+                "name": "ItemName",
+                "code": "ItemCode",
+                "category": "Category",
+                "unit_price": "UnitPrice",
             },
         },
     }
@@ -1320,6 +1433,7 @@ def _default_onyx_tables() -> dict:
 # ║  Web Setup Launcher                                                      ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+
 def launch_web_setup() -> None:
     """Start the FastAPI web setup server."""
     print(L["web_launching"])
@@ -1328,21 +1442,29 @@ def launch_web_setup() -> None:
     print(L["web_stop"])
 
     try:
-        import webbrowser
         import time as _t
+        import webbrowser
+
         _t.sleep(1.5)  # wait for server to start
         webbrowser.open(L["web_url"])
     except Exception:
         pass
 
     try:
-        subprocess.run([
-            sys.executable, "-m", "uvicorn",
-            "setup_web:app",
-            "--host", "0.0.0.0",
-            "--port", "8088",
-            "--reload",
-        ], check=False)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "setup_web:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8088",
+                "--reload",
+            ],
+            check=False,
+        )
     except KeyboardInterrupt:
         print(f"\n{C.YELLOW}  Server stopped.{C.RESET}")
 
@@ -1350,6 +1472,7 @@ def launch_web_setup() -> None:
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  Entry point                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -1363,9 +1486,13 @@ Examples:
   python setup.py --update   -- Update existing configuration
         """,
     )
-    parser.add_argument("--cli",    action="store_true", help="Force CLI mode")
-    parser.add_argument("--web",    action="store_true", help="Force Web mode")
-    parser.add_argument("--update", action="store_true", help="Update existing configuration (keeps unchanged values)")
+    parser.add_argument("--cli", action="store_true", help="Force CLI mode")
+    parser.add_argument("--web", action="store_true", help="Force Web mode")
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update existing configuration (keeps unchanged values)",
+    )
     args = parser.parse_args()
 
     cfg = ConfigManager()
@@ -1379,7 +1506,7 @@ Examples:
         banner(L["welcome_title"])
         print(f"  {C.DIM}Professional Setup Wizard v3.0{C.RESET}\n")
         modes = [L["mode_cli"], L["mode_web"]]
-        idx  = choose(modes, L["choose_mode"], default=0)
+        idx = choose(modes, L["choose_mode"], default=0)
         mode = "cli" if idx == 0 else "web"
 
     if mode == "cli":

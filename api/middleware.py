@@ -1,9 +1,10 @@
 """FastAPI middleware: security headers, CORS, rate limiting, request logging."""
+
 from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         api_key = request.headers.get("X-API-Key", "anonymous")
         from api.dependencies import API_KEYS  # avoid circular import
+
         role = API_KEYS.get(api_key, "anonymous")
         limit = RATE_LIMITS.get(role, RATE_LIMITS["anonymous"])
 
@@ -66,6 +68,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 # ─── Security Headers ─────────────────────────────────────────────────────────
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Adds security headers to every response."""
 
@@ -85,6 +88,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # ─── Request Timing ───────────────────────────────────────────────────────────
 
+
 class RequestTimingMiddleware(BaseHTTPMiddleware):
     """Adds X-Process-Time header to every response."""
 
@@ -96,6 +100,7 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
 
 
 # ─── Registration helper ──────────────────────────────────────────────────────
+
 
 def register_middleware(app: FastAPI, allowed_origins: list[str] | None = None) -> None:
     """Register all middleware on the FastAPI app (order matters: last added = outermost)."""

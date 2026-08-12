@@ -8,6 +8,7 @@ Environment:
   SCHEDULER_TIMEZONE=Asia/Riyadh  -- for display only (asyncio uses local time)
   WHATSAPP_BRIDGE_URL             -- URL of the WhatsApp bridge send endpoint
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,14 +31,27 @@ class ScheduledJob:
     """Represents one scheduled task."""
 
     FIELDS = (
-        "job_id", "name", "prompt", "trigger", "hour", "minute",
-        "day_of_week", "interval_minutes", "notify_whatsapp",
-        "notify_telegram", "notify_email", "enabled",
-        "created_at", "last_run", "last_result", "run_count",
+        "job_id",
+        "name",
+        "prompt",
+        "trigger",
+        "hour",
+        "minute",
+        "day_of_week",
+        "interval_minutes",
+        "notify_whatsapp",
+        "notify_telegram",
+        "notify_email",
+        "enabled",
+        "created_at",
+        "last_run",
+        "last_result",
+        "run_count",
     )
 
     def __init__(
-        self, *,
+        self,
+        *,
         job_id: str | None = None,
         name: str,
         prompt: str,
@@ -76,7 +90,7 @@ class ScheduledJob:
         return {f: getattr(self, f) for f in self.FIELDS}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "ScheduledJob":
+    def from_dict(cls, d: dict) -> ScheduledJob:
         valid = {k: v for k, v in d.items() if k in cls.FIELDS}
         return cls(**valid)
 
@@ -98,8 +112,7 @@ class SchedulerEngine:
     def _save(self) -> None:
         JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(JOBS_FILE, "w", encoding="utf-8") as f:
-            json.dump([j.to_dict() for j in self._jobs.values()], f,
-                      ensure_ascii=False, indent=2)
+            json.dump([j.to_dict() for j in self._jobs.values()], f, ensure_ascii=False, indent=2)
 
     def _load(self) -> None:
         if not JOBS_FILE.exists():
@@ -233,6 +246,7 @@ class SchedulerEngine:
             if self._gateway is None:
                 raise RuntimeError("LLM Gateway not initialized in scheduler")
             from orchestrator.agent import OrchestratorAgent
+
             agent = OrchestratorAgent(self._gateway)
             result = await agent.run(job.prompt)
             answer = result.get("answer", "No answer.")
@@ -253,18 +267,21 @@ class SchedulerEngine:
             bridge_url = os.getenv("WHATSAPP_BRIDGE_URL", "http://localhost:3001")
             try:
                 import httpx
+
                 async with httpx.AsyncClient(timeout=30) as client:
                     for number in job.notify_whatsapp.split(","):
                         number = number.strip()
                         if number:
-                            await client.post(f"{bridge_url}/send",
-                                              json={"number": number, "message": full_msg})
+                            await client.post(
+                                f"{bridge_url}/send", json={"number": number, "message": full_msg}
+                            )
             except Exception as exc:
                 logger.warning("Scheduler: WhatsApp delivery failed: %s", exc)
 
         if job.notify_email:
             try:
                 from tools.communication import send_email_notification
+
                 for email in job.notify_email.split(","):
                     email = email.strip()
                     if email:

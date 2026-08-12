@@ -1,4 +1,5 @@
 """API endpoint integration tests using FastAPI's async test client."""
+
 from __future__ import annotations
 
 import os
@@ -10,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 # ─── Health endpoint ─────────────────────────────────────────────────────────
+
 
 class TestHealthEndpoint:
     """Tests for the /health endpoint."""
@@ -34,6 +36,7 @@ class TestHealthEndpoint:
 
 
 # ─── Tools endpoint ───────────────────────────────────────────────────────────
+
 
 class TestToolsEndpoint:
     """Tests for GET /v1/tools."""
@@ -60,6 +63,7 @@ class TestToolsEndpoint:
 
 # ─── Auth / Rate Limiting ────────────────────────────────────────────────────
 
+
 class TestAuthentication:
     """Test API key authentication."""
 
@@ -85,6 +89,7 @@ class TestAuthentication:
 
 # ─── Security Headers ────────────────────────────────────────────────────────
 
+
 class TestSecurityHeaders:
     """Verify security headers are present on responses."""
 
@@ -107,6 +112,7 @@ class TestSecurityHeaders:
 
 
 # ─── Knowledge Base endpoints ────────────────────────────────────────────────
+
 
 class TestKnowledgeEndpoints:
     """Test /v1/knowledge endpoints."""
@@ -133,7 +139,10 @@ class TestKnowledgeEndpoints:
         async with test_client as client:
             r = await client.post(
                 "/v1/knowledge",
-                json={"title": "Test Doc", "content": "This is test content for the knowledge base."},
+                json={
+                    "title": "Test Doc",
+                    "content": "This is test content for the knowledge base.",
+                },
                 headers=admin_headers,
             )
         assert r.status_code == 200
@@ -143,6 +152,7 @@ class TestKnowledgeEndpoints:
 
 
 # ─── Agent Settings ──────────────────────────────────────────────────────────
+
 
 class TestAgentSettings:
     """Test /v1/settings/agent endpoints."""
@@ -170,6 +180,7 @@ class TestAgentSettings:
 
 
 # ─── Conversation endpoints ──────────────────────────────────────────────────
+
 
 class TestConversationEndpoints:
     """Test /v1/conversations endpoints."""

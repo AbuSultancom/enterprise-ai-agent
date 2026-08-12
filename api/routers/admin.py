@@ -1,4 +1,5 @@
 """Admin router: tools list, settings, SMTP test, key rotation, audit log."""
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,10 @@ class AgentSettingsRequest(BaseModel):
 
 @router.get("/tools", dependencies=[Depends(require_role("admin", "user"))])
 async def list_tools():
-    return [{"name": t.name, "description": t.description, "parameters": t.parameters} for t in registry.list()]
+    return [
+        {"name": t.name, "description": t.description, "parameters": t.parameters}
+        for t in registry.list()
+    ]
 
 
 @router.get("/settings/agent", dependencies=[Depends(require_role("admin", "user"))])
@@ -48,7 +52,9 @@ async def get_agent_settings():
 
 
 @router.post("/settings/agent", dependencies=[Depends(require_role("admin"))])
-async def update_agent_settings(req: AgentSettingsRequest, role: str = Security(require_role("admin"))):
+async def update_agent_settings(
+    req: AgentSettingsRequest, role: str = Security(require_role("admin"))
+):
     current = config_loader.load_settings()
     agent_cfg = current.get("agent", {})
     if req.name is not None:
@@ -66,6 +72,7 @@ async def update_agent_settings(req: AgentSettingsRequest, role: str = Security(
 @router.post("/settings/smtp/test", dependencies=[Depends(require_role("admin"))])
 async def test_smtp_settings(to_email: str):
     from tools.communication import send_email_notification
+
     res = await send_email_notification(
         to_email,
         "Enterprise AI Agent — Test Alert",
@@ -77,6 +84,7 @@ async def test_smtp_settings(to_email: str):
 @router.post("/admin/rotate-key", dependencies=[Depends(require_role("admin"))])
 async def rotate_key(role: str = "user"):
     from api.dependencies import API_KEYS
+
     key = secrets.token_urlsafe(32)
     API_KEYS[key] = role
     return {"api_key": key, "role": role}

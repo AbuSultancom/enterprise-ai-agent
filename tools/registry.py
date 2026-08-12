@@ -1,9 +1,11 @@
 """Tool registry — plug new capabilities into the agent with one decorator."""
+
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -24,7 +26,9 @@ class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, Tool] = {}
 
-    def register(self, description: str, parameters: dict[str, Any] | None = None, name: str | None = None):
+    def register(
+        self, description: str, parameters: dict[str, Any] | None = None, name: str | None = None
+    ):
         def decorator(func: Callable):
             tool_name = name or func.__name__
             self._tools[tool_name] = Tool(
@@ -34,6 +38,7 @@ class ToolRegistry:
                 parameters=parameters or {},
             )
             return func
+
         return decorator
 
     def get(self, name: str) -> Tool | None:
@@ -46,7 +51,11 @@ class ToolRegistry:
         """Text block injected into the agent's system prompt."""
         lines = []
         for t in self._tools.values():
-            props = t.parameters.get("properties", t.parameters) if isinstance(t.parameters, dict) else {}
+            props = (
+                t.parameters.get("properties", t.parameters)
+                if isinstance(t.parameters, dict)
+                else {}
+            )
             param_parts = []
             if isinstance(props, dict):
                 for k, v in props.items():

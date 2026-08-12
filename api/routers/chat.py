@@ -1,4 +1,5 @@
 """Chat router: /v1/chat and /v1/chat/stream endpoints."""
+
 from __future__ import annotations
 
 import json
@@ -6,15 +7,14 @@ import os
 
 from fastapi import APIRouter, Depends, Security
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 import config_loader
 from agent_core.agent import Agent
 from api.dependencies import audit, require_role
 from llm_gateway.gateway import LLMGateway, Message
-from memory.conversation import get_store as get_conv_store
 from memory.store import KnowledgeStore
 from orchestrator.agent import OrchestratorAgent
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1", tags=["Chat"])
 
@@ -58,7 +58,10 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
     _conv_store.save_message(session_id, "user", req.message)
 
     from tools.registry import registry as _registry
-    agent = OrchestratorAgent(_gateway) if req.mode == "orchestrator" else Agent(_gateway, _registry)
+
+    agent = (
+        OrchestratorAgent(_gateway) if req.mode == "orchestrator" else Agent(_gateway, _registry)
+    )
     message = req.message
     if req.use_knowledge and config_loader.knowledge_rag_enabled():
         message = await _with_knowledge(req.message)
@@ -74,13 +77,16 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
     # Learn from exchange
     try:
         from memory.learning import learner
+
         tools_used = [s.get("tool", "") for s in result.get("steps", [])]
         learner.learn_from_exchange(req.message, answer, tools_used)
         for step in result.get("steps", []):
             if "weather" in step.get("tool", ""):
                 city = req.message.replace("طقس", "").replace("weather", "").strip("? ").strip()
                 if city:
-                    learner.learn_fact("last_weather_check", f"{city}: {str(step.get('result', ''))[:100]}")
+                    learner.learn_fact(
+                        "last_weather_check", f"{city}: {str(step.get('result', ''))[:100]}"
+                    )
     except Exception:
         pass
 
@@ -90,11 +96,15 @@ async def chat(req: ChatRequest, role: str = Security(require_role("admin", "use
         title = req.message[:60] + ("…" if len(req.message) > 60 else "")
         _conv_store.rename_session(session_id, title)
 
-    audit("chat", role, {
-        "message": req.message[:500],
-        "session_id": session_id,
-        "tools_used": [s.get("tool") for s in result.get("steps", [])],
-    })
+    audit(
+        "chat",
+        role,
+        {
+            "message": req.message[:500],
+            "session_id": session_id,
+            "tools_used": [s.get("tool") for s in result.get("steps", [])],
+        },
+    )
     return {"session_id": session_id, **result}
 
 
@@ -107,7 +117,10 @@ async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin
     _conv_store.save_message(session_id, "user", req.message)
 
     from tools.registry import registry as _registry
-    agent = OrchestratorAgent(_gateway) if req.mode == "orchestrator" else Agent(_gateway, _registry)
+
+    agent = (
+        OrchestratorAgent(_gateway) if req.mode == "orchestrator" else Agent(_gateway, _registry)
+    )
     message = req.message
     if req.use_knowledge and config_loader.knowledge_rag_enabled():
         message = await _with_knowledge(req.message)
@@ -130,6 +143,7 @@ async def chat_stream(req: ChatRequest, role: str = Security(require_role("admin
             _conv_store.save_message(session_id, "assistant", full)
             try:
                 from memory.learning import learner
+
                 learner.learn_from_exchange(req.message, full)
             except Exception:
                 pass

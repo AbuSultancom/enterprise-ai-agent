@@ -1,9 +1,12 @@
 """Voice processing tools (Speech-to-Text & Text-to-Speech)."""
+
 from __future__ import annotations
 
 import base64
 import os
+
 import httpx
+
 from tools.registry import registry
 
 
@@ -14,7 +17,10 @@ from tools.registry import registry
         "type": "object",
         "properties": {
             "audio_base64": {"type": "string", "description": "Base64 encoded audio clip"},
-            "language": {"type": "string", "description": "Expected language code ('ar', 'en', or 'auto')"},
+            "language": {
+                "type": "string",
+                "description": "Expected language code ('ar', 'en', or 'auto')",
+            },
         },
         "required": ["audio_base64"],
     },
@@ -33,7 +39,12 @@ async def speech_to_text(audio_base64: str, language: str = "auto") -> str:
 
         headers = {"Authorization": f"Bearer {openai_key}"}
         async with httpx.AsyncClient(timeout=30) as client:
-            res = await client.post("https://api.openai.com/v1/audio/transcriptions", headers=headers, data=data, files=files)
+            res = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers=headers,
+                data=data,
+                files=files,
+            )
             res.raise_for_status()
             return res.json().get("text", "")
     except Exception as e:
@@ -47,7 +58,10 @@ async def speech_to_text(audio_base64: str, language: str = "auto") -> str:
         "type": "object",
         "properties": {
             "text": {"type": "string", "description": "Text to convert to speech"},
-            "voice": {"type": "string", "description": "Voice type or accent ('alloy', 'echo', 'fable', 'ar-SA-Zariyah')"},
+            "voice": {
+                "type": "string",
+                "description": "Voice type or accent ('alloy', 'echo', 'fable', 'ar-SA-Zariyah')",
+            },
         },
         "required": ["text"],
     },
@@ -61,7 +75,9 @@ async def text_to_speech(text: str, voice: str = "alloy") -> str:
         headers = {"Authorization": f"Bearer {openai_key}"}
         payload = {"model": "tts-1", "input": text, "voice": voice}
         async with httpx.AsyncClient(timeout=30) as client:
-            res = await client.post("https://api.openai.com/v1/audio/speech", headers=headers, json=payload)
+            res = await client.post(
+                "https://api.openai.com/v1/audio/speech", headers=headers, json=payload
+            )
             res.raise_for_status()
             encoded = base64.b64encode(res.content).decode("utf-8")
             return f"data:audio/mp3;base64,{encoded}"

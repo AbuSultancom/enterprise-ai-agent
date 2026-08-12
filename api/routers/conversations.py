@@ -1,4 +1,5 @@
 """Conversations router: list, get, export, delete sessions."""
+
 from __future__ import annotations
 
 import datetime
@@ -49,7 +50,8 @@ async def export_conversation(session_id: str, format: str = "markdown"):
     if format == "json":
         data = json.dumps(
             {"session_id": session_id, "title": title, "messages": messages},
-            indent=2, ensure_ascii=False,
+            indent=2,
+            ensure_ascii=False,
         )
         return StreamingResponse(
             io.BytesIO(data.encode("utf-8")),

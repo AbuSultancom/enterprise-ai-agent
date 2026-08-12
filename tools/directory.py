@@ -6,22 +6,51 @@ Agent knows your employees: search by name, department, role, contact info.
 
 import json
 import os
-from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EMPLOYEES_FILE = os.path.join(ROOT, "config", "employees.json")
 
 DEFAULT_EMPLOYEES = [
-    {"id": 1, "name": "Abdulhameed", "role": "CEO / Owner",
-     "department": "Administration", "phone": "966500000001", "email": "abdulhameed@company.sa"},
-    {"id": 2, "name": "Ahmed Mohammed", "role": "Accountant",
-     "department": "Finance", "phone": "966500000002", "email": "ahmed@company.sa"},
-    {"id": 3, "name": "Fatima Ali", "role": "Sales Manager",
-     "department": "Sales", "phone": "966500000003", "email": "fatima@company.sa"},
-    {"id": 4, "name": "Khalid Abdullah", "role": "Warehouse Manager",
-     "department": "Warehouse", "phone": "966500000004", "email": "khalid@company.sa"},
-    {"id": 5, "name": "Sara Omar", "role": "Customer Support",
-     "department": "Support", "phone": "966500000005", "email": "sara@company.sa"},
+    {
+        "id": 1,
+        "name": "Abdulhameed",
+        "role": "CEO / Owner",
+        "department": "Administration",
+        "phone": "966500000001",
+        "email": "abdulhameed@company.sa",
+    },
+    {
+        "id": 2,
+        "name": "Ahmed Mohammed",
+        "role": "Accountant",
+        "department": "Finance",
+        "phone": "966500000002",
+        "email": "ahmed@company.sa",
+    },
+    {
+        "id": 3,
+        "name": "Fatima Ali",
+        "role": "Sales Manager",
+        "department": "Sales",
+        "phone": "966500000003",
+        "email": "fatima@company.sa",
+    },
+    {
+        "id": 4,
+        "name": "Khalid Abdullah",
+        "role": "Warehouse Manager",
+        "department": "Warehouse",
+        "phone": "966500000004",
+        "email": "khalid@company.sa",
+    },
+    {
+        "id": 5,
+        "name": "Sara Omar",
+        "role": "Customer Support",
+        "department": "Support",
+        "phone": "966500000005",
+        "email": "sara@company.sa",
+    },
 ]
 
 
@@ -65,17 +94,19 @@ async def search_employee(query: str = "") -> str:
         q = query.lower()
         results = []
         for emp in employees:
-            if (q in emp.get("name", "").lower() or
-                q in emp.get("department", "").lower() or
-                q in emp.get("role", "").lower() or
-                q in emp.get("phone", "") or
-                q in emp.get("email", "").lower()):
+            if (
+                q in emp.get("name", "").lower()
+                or q in emp.get("department", "").lower()
+                or q in emp.get("role", "").lower()
+                or q in emp.get("phone", "")
+                or q in emp.get("email", "").lower()
+            ):
                 results.append(emp)
 
         if not results:
-            return f"❌ No employee matches \"{query}\""
+            return f'❌ No employee matches "{query}"'
 
-        lines = [f"🔍 Search results for \"{query}\" — {len(results)} employee(s)\n"]
+        lines = [f'🔍 Search results for "{query}" — {len(results)} employee(s)\n']
         for emp in results:
             lines.append(
                 f"  🧑 {emp['name']}\n"
@@ -88,8 +119,9 @@ async def search_employee(query: str = "") -> str:
         return f"❌ Search error: {e}"
 
 
-async def add_employee(name: str, role: str = "", department: str = "",
-                        phone: str = "", email: str = "") -> str:
+async def add_employee(
+    name: str, role: str = "", department: str = "", phone: str = "", email: str = ""
+) -> str:
     """Add a new employee to the directory.
 
     Args:

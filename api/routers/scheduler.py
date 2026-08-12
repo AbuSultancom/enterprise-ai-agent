@@ -1,4 +1,5 @@
 """Scheduler router — CRUD API for scheduled agent jobs."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,7 @@ router = APIRouter(prefix="/v1/scheduler", tags=["Scheduler"])
 
 
 # ── Request models ──────────────────────────────────────────────────────────
+
 
 class JobRequest(BaseModel):
     name: str = Field(..., description="Human-readable job name")
@@ -44,6 +46,7 @@ class JobUpdateRequest(BaseModel):
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
+
 
 @router.get("", dependencies=[Depends(require_role("admin", "user"))])
 async def list_jobs():

@@ -1,10 +1,12 @@
 """Communication & Alerting tools (Email SMTP & Webhooks)."""
+
 from __future__ import annotations
 
 import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 import httpx
 
 from tools.registry import registry
@@ -25,7 +27,7 @@ from tools.registry import registry
 )
 async def send_email_notification(to_email: str, subject: str, body: str) -> str:
     smtp_server = os.getenv("SMTP_SERVER", "localhost")
-    smtp_port = int(os.getenv("SMTP_PORT", "1025")) # Default to local test SMTP or Mailpit
+    smtp_port = int(os.getenv("SMTP_PORT", "1025"))  # Default to local test SMTP or Mailpit
     smtp_user = os.getenv("SMTP_USER", "")
     smtp_pass = os.getenv("SMTP_PASS", "")
 

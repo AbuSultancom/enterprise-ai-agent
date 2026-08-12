@@ -6,6 +6,7 @@ Two retrieval modes:
 - keyword search as automatic fallback
 Documents are persisted as JSON on disk; embeddings are cached inside them.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,11 +14,14 @@ import math
 import os
 import re
 import uuid
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 
-DB_PATH = os.getenv("MEMORY_DB_PATH",
-                     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                  "data", "knowledge.json"))
+DB_PATH = os.getenv(
+    "MEMORY_DB_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "knowledge.json"
+    ),
+)
 
 
 @dataclass
@@ -29,7 +33,7 @@ class Document:
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na = math.sqrt(sum(x * x for x in a)) or 1e-9
     nb = math.sqrt(sum(x * x for x in b)) or 1e-9
     return dot / (na * nb)
@@ -80,8 +84,7 @@ class KnowledgeStore:
 
     def search_semantic(self, query_embedding: list[float], top_k: int = 3) -> list[Document]:
         scored = [
-            (_cosine(query_embedding, d.embedding), d)
-            for d in self._docs.values() if d.embedding
+            (_cosine(query_embedding, d.embedding), d) for d in self._docs.values() if d.embedding
         ]
         scored.sort(key=lambda x: x[0], reverse=True)
         return [d for score, d in scored[:top_k] if score > 0.25]

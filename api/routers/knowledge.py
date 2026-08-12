@@ -1,4 +1,5 @@
 """Knowledge base router: list, add, upload, delete documents."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Security, UploadFile
@@ -30,11 +31,16 @@ def _extract_text(filename: str, data: bytes) -> str:
     if name.endswith((".txt", ".md", ".csv", ".json", ".log")):
         return data.decode("utf-8", errors="replace")
     if name.endswith(".pdf"):
-        from pypdf import PdfReader
         import io
+
+        from pypdf import PdfReader
+
         return "\n".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages)
     if name.endswith(".docx"):
-        import docx, io  # noqa: E401
+        import io
+
+        import docx  # noqa: E401
+
         return "\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)
     raise ValueError(f"Unsupported file type: {filename} (use .txt .md .csv .pdf .docx)")
 
@@ -68,11 +74,11 @@ async def upload_doc(file: UploadFile, role: str = Security(require_role("admin"
     try:
         text = _extract_text(file.filename or "document", data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text could be extracted from this file")
 
-    chunks = [text[i: i + 3000] for i in range(0, len(text), 3000)]
+    chunks = [text[i : i + 3000] for i in range(0, len(text), 3000)]
     ids = []
     for i, chunk in enumerate(chunks):
         title = f"{file.filename}" + (f" (part {i + 1}/{len(chunks)})" if len(chunks) > 1 else "")

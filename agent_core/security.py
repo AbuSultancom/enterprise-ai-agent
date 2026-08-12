@@ -1,9 +1,9 @@
 """Role-Based Access Control (RBAC) and Security Management for Enterprise AI Agent."""
+
 from __future__ import annotations
 
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import Any, Set
+from enum import Enum
 
 
 class Role(str, Enum):
@@ -18,11 +18,11 @@ class UserContext:
     username: str
     role: Role = Role.EMPLOYEE
     department: str = "General"
-    permissions: Set[str] = field(default_factory=set)
+    permissions: set[str] = field(default_factory=set)
 
 
 # Restrict sensitive tools by default to specific roles
-RESTRICTED_TOOLS: dict[str, Set[Role]] = {
+RESTRICTED_TOOLS: dict[str, set[Role]] = {
     # Accounting & ERP tools restricted to Managers & Admins
     "get_sales_summary": {Role.ADMIN, Role.MANAGER},
     "get_revenue_by_month": {Role.ADMIN, Role.MANAGER},
@@ -55,4 +55,7 @@ class SecurityManager:
         if user.role in allowed_roles:
             return True, f"Allowed ({user.role.value})"
 
-        return False, f"Access denied: tool '{tool_name}' requires role {[r.value for r in allowed_roles]}"
+        return (
+            False,
+            f"Access denied: tool '{tool_name}' requires role {[r.value for r in allowed_roles]}",
+        )

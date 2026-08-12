@@ -27,7 +27,7 @@ print("""
     [1/7] Language
           → Select: English / العربية
 
-    [2/7] LLM Configuration  
+    [2/7] LLM Configuration
           → Provider: Ollama / OpenAI / Claude / Gemini
           → Model: qwen2.5:7b / llama3.1:8b / etc.
           → URL: http://localhost:11434
