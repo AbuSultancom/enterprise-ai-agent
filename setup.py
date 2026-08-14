@@ -463,6 +463,61 @@ def test_db_connection(url: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def check_db_permissions(url: str, db_type: str) -> tuple[bool | None, str]:
+    """Verify the connected DB user is read-only.
+
+    Returns (status, message):
+      True  — confirmed read-only
+      False — user CAN write (warn!)
+      None  — could not determine
+    """
+    try:
+        from sqlalchemy import create_engine, text  # type: ignore
+    except ImportError:
+        return None, "SQLAlchemy not installed"
+    try:
+        engine = create_engine(url)
+        with engine.connect() as conn:
+            if db_type == "oracle":
+                rows = conn.execute(
+                    text(
+                        "SELECT privilege FROM session_privs WHERE privilege IN ("
+                        "'INSERT ANY TABLE','UPDATE ANY TABLE','DELETE ANY TABLE',"
+                        "'DROP ANY TABLE','CREATE ANY TABLE','CREATE TABLE')"
+                    )
+                ).fetchall()
+                if rows:
+                    privs = ", ".join(str(r[0]) for r in rows)
+                    return False, f"user has write privileges: {privs}"
+                return True, "user has SELECT-only privileges (Oracle session_privs)"
+            if db_type == "mysql":
+                rows = conn.execute(text("SHOW GRANTS")).fetchall()
+                grants = " | ".join(str(r[0]) for r in rows).upper()
+                if any(
+                    w in grants for w in ("ALL PRIVILEGES", "INSERT", "UPDATE", "DELETE", "DROP")
+                ):
+                    return False, "grants include write privileges"
+                return True, "grants are SELECT-only"
+            # mssql / postgresql / sqlite: transactional DDL probe — always rolled back
+            trans = conn.begin()
+            try:
+                conn.execute(text("CREATE TABLE __ai_write_probe (x INT)"))
+                # Drop immediately AND roll back: covers engines whose DDL
+                # auto-commits (SQLite/MySQL) as well as transactional DDL
+                # (MSSQL/PostgreSQL) — either way nothing is left behind.
+                try:
+                    conn.execute(text("DROP TABLE __ai_write_probe"))
+                except Exception:
+                    pass
+                trans.rollback()
+                return False, "user can CREATE TABLE (probe table was dropped and rolled back)"
+            except Exception:
+                trans.rollback()
+                return True, "DDL probe was rejected by the database — user is read-only"
+    except Exception as exc:
+        return None, str(exc)[:150]
+
+
 def discover_db_schema(url: str) -> dict:
     """
     Auto-discover tables and columns from a live database.
@@ -1206,6 +1261,19 @@ class CLIWizard:
                 ok, msg = spinner_run(L["test_connection"], test_db_connection, db_url)
                 if ok:
                     print(f"  {C.GREEN}✔  {L['connection_ok']}{C.RESET}")
+
+                    # ── Verify the DB user is read-only ────────────────────
+                    ro_ok, ro_msg = check_db_permissions(db_url, db_type)
+                    if ro_ok is True:
+                        self._ok(f"Permissions: {ro_msg}")
+                    elif ro_ok is None:
+                        self._info(f"Permissions check skipped: {ro_msg}")
+                    else:
+                        self._warn(f"DB user CAN WRITE to the database: {ro_msg}")
+                        self._warn(
+                            "The agent itself is read-only (5 layers), but a SELECT-only "
+                            "user is strongly recommended. Ask your DBA for one."
+                        )
 
                     # ── Auto-discover ──────────────────────────────────────
                     if ask_yes("  Auto-discover tables and columns?", default=True):
