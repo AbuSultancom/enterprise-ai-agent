@@ -47,6 +47,7 @@ ACCOUNTING_TOOLS = {
     "get_expenses_summary",
     "get_invoice",
     "get_cash_balance",
+    "ask_database",
 }
 
 

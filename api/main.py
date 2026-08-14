@@ -18,6 +18,7 @@ import config_loader
 import tools.accounting  # noqa: F401 — registers accounting/ERP tools
 import tools.builtin  # noqa: F401 — registers built-in tools
 import tools.communication  # noqa: F401 — registers communication tools
+import tools.memory  # noqa: F401 — registers long-term memory tools
 import tools.voice  # noqa: F401 — registers voice tools
 from api.middleware import register_middleware
 from connectors.accounting import connector as accounting_db
