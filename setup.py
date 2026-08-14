@@ -1489,6 +1489,14 @@ def launch_web_setup() -> None:
 
 
 def main() -> None:
+    # Optional rich UI: upgrades the CLI wizard visuals; ANSI fallback if unavailable.
+    try:
+        from cli_ui import apply as _rich_ui
+
+        _rich_ui(globals())
+    except Exception:
+        pass
+
     parser = argparse.ArgumentParser(
         description="Enterprise AI Agent -- Professional Setup Wizard v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
